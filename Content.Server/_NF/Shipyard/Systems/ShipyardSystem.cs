@@ -1,13 +1,19 @@
 using Content.Server.Shuttles.Systems;
 using Content.Server.Shuttles.Components;
+using Content.Server.Atmos.EntitySystems;
+using Content.Server.Atmos.Components;
 using Content.Server.Station.Components;
 using Content.Server.Cargo.Systems;
 using Content.Server.Station.Systems;
+using Content.Shared.Atmos;
+using Content.Shared.Atmos.Components;
 using Content.Shared._NF.Shipyard.Components;
 using Content.Shared._NF.Shipyard;
 using Content.Shared.GameTicking;
 using Robust.Server.GameObjects;
 using Robust.Shared.Map;
+using Robust.Shared.Map.Components;
+using Robust.Shared.Maths;
 using Content.Shared._NF.CCVar;
 using Robust.Shared.Configuration;
 using System.Diagnostics.CodeAnalysis;
@@ -31,6 +37,7 @@ public sealed partial class ShipyardSystem : SharedShipyardSystem
     [Dependency] private readonly StationSystem _station = default!;
     [Dependency] private readonly MapLoaderSystem _mapLoader = default!;
     [Dependency] private readonly MetaDataSystem _metaData = default!;
+    [Dependency] private readonly AtmosphereSystem _atmosphere = default!;
     [Dependency] private readonly MapSystem _map = default!;
     [Dependency] private readonly SharedTransformSystem _transform = default!;
 
@@ -169,7 +176,51 @@ public sealed partial class ShipyardSystem : SharedShipyardSystem
         _shuttleIndex += grid.Value.Comp.LocalAABB.Width + ShuttleSpawnBuffer;
 
         shuttleGrid = grid.Value.Owner;
+
+        // Keep purchase-time atmos refresh scoped to Khonsu to avoid disturbing other ship setups.
+        if (shuttlePath.ToString().EndsWith("khonsu.yml", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!_atmosphere.RebuildGridAtmosphere(shuttleGrid.Value))
+            {
+                _sawmill.Warning($"Failed to refresh atmosphere data for shuttle {shuttlePath} on grid {ToPrettyString(shuttleGrid.Value)}.");
+            }
+            else
+            {
+                PressurizeKhonsuGridAirMix(shuttleGrid.Value);
+            }
+        }
+
         return true;
+    }
+
+    private void PressurizeKhonsuGridAirMix(EntityUid gridUid)
+    {
+        if (!TryComp(gridUid, out GridAtmosphereComponent? _))
+        {
+            _sawmill.Warning($"Khonsu lower-deck pressurization skipped; missing atmosphere components on {ToPrettyString(gridUid)}.");
+            return;
+        }
+
+        foreach (var air in _atmosphere.GetAllMixtures(gridUid, true))
+        {
+            if (air.Immutable)
+                continue;
+
+            var addO2 = Atmospherics.OxygenMolesStandard - air.GetMoles(Gas.Oxygen);
+            var addN2 = Atmospherics.NitrogenMolesStandard - air.GetMoles(Gas.Nitrogen);
+
+            if (addO2 > 0f)
+                air.AdjustMoles(Gas.Oxygen, addO2);
+
+            if (addN2 > 0f)
+                air.AdjustMoles(Gas.Nitrogen, addN2);
+
+            if (addO2 > 0f || addN2 > 0f)
+            {
+                air.Temperature = Atmospherics.T20C;
+            }
+        }
+
     }
 
     /// <summary>

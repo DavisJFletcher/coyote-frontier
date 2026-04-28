@@ -347,6 +347,15 @@ public sealed class HumanoidAppearanceSystem : SharedHumanoidAppearanceSystem
         DebugTools.Assert(IsClientSide(uid));
 
         humanoid.MarkingSet = markings;
+        humanoid.HiddenMarkings = new HashSet<string>();
+        foreach (var markingList in humanoid.MarkingSet.Markings.Values)
+        {
+            foreach (var marking in markingList)
+            {
+                if (!marking.ShowAtStart)
+                    humanoid.HiddenMarkings.Add(marking.MarkingId);
+            }
+        }
         humanoid.PermanentlyHidden = new HashSet<HumanoidVisualLayers>();
         humanoid.HiddenLayers = new Dictionary<HumanoidVisualLayers, SlotFlags>();
         humanoid.CustomBaseLayers = customBaseLayers;

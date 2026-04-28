@@ -434,6 +434,8 @@ namespace Content.Server.Database
         public List<Job> Jobs { get; } = new();
         public List<Antag> Antags { get; } = new();
         public List<Trait> Traits { get; } = new();
+        [Column("hidden_emote_categories")]
+        public string HiddenEmoteCategories { get; set; } = string.Empty;
 
         public List<ProfileRoleLoadout> Loadouts { get; } = new();
 
