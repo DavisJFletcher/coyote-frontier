@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+
 namespace Content.Server.SurveillanceCamera;
 
 /// <summary>
@@ -19,4 +22,20 @@ public sealed partial class SurveillanceCameraSpeakerComponent : Component
     /// </summary>
     [DataField("requiresEntertainmentCamera")]
     public bool RequiresEntertainmentCamera = false;
+
+    /// <summary>
+    /// Additional relay volume offset in dB applied to TV-transmitted speech audio.
+    /// 0 = full volume, negative values attenuate.
+    /// </summary>
+    [DataField("relayVolumeDb")]
+    public float RelayVolumeDb = 0f;
+
+    /// <summary>
+    /// True when TV relay output is muted.
+    /// </summary>
+    [DataField("relayMuted")]
+    public bool RelayMuted = false;
+
+    [ViewVariables]
+    public Dictionary<EntityUid, TimeSpan> RelayMidiSources { get; } = new();
 }

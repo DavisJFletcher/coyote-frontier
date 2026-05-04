@@ -1,5 +1,6 @@
 using Content.Server.Radio.EntitySystems;
 using Content.Shared.Radio;
+using Content.Server.Weather;
 using Content.Shared.Salvage;
 using Robust.Server.GameObjects;
 using Robust.Shared.Configuration;
@@ -74,6 +75,7 @@ namespace Content.Server.Salvage
             UpdateExpeditions();
             UpdateMagnet();
             UpdateRunner();
+                UpdateExpeditionWeather();
         }
     }
 }

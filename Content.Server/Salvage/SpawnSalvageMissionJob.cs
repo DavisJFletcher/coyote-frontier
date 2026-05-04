@@ -44,6 +44,9 @@ namespace Content.Server.Salvage;
 
 public sealed class SpawnSalvageMissionJob : Job<bool>
 {
+    private const int SharedExpeditionSizeMultiplier = 4;
+    private const int SharedObjectiveMultiplier = 2;
+
     private static readonly ProtoId<LocalizedDatasetPrototype> NamesDataset = "NamesBorer";
 
     private readonly IEntityManager _entManager;
@@ -228,11 +231,11 @@ public sealed class SpawnSalvageMissionJob : Job<bool>
         var dungeonOffset = new Vector2(0f, dungeonOffsetDistance);
         dungeonOffset = dungeonRotation.RotateVec(dungeonOffset);
         var dungeonMod = _prototypeManager.Index<SalvageDungeonModPrototype>(mission.Dungeon);
-        var dungeonConfig = _prototypeManager.Index(dungeonMod.Proto);
+        var dungeonConfig = GetDungeonConfigForMission(dungeonMod.Proto);
         var dungeons = await WaitAsyncTask(_dungeon.GenerateDungeonAsync(dungeonConfig, dungeonMod.Proto, mapUid, grid, (Vector2i)dungeonOffset, // _CS: add dungeonMod.Proto
             _missionParams.Seed));
 
-        var dungeon = dungeons.First();
+        var dungeon = MergeDungeons(dungeons);
 
         // Aborty
         if (dungeon.Rooms.Count == 0)
@@ -409,6 +412,50 @@ public sealed class SpawnSalvageMissionJob : Job<bool>
         return true;
     }
 
+    private DungeonConfig GetDungeonConfigForMission(ProtoId<DungeonConfigPrototype> dungeonProto)
+    {
+        var baseConfig = _prototypeManager.Index(dungeonProto);
+
+        if (!_missionParams.OpenContract)
+            return baseConfig;
+
+        return new DungeonConfig
+        {
+            Layers = baseConfig.Layers,
+            ReserveTiles = baseConfig.ReserveTiles,
+            MinCount = Math.Max(1, baseConfig.MinCount * SharedExpeditionSizeMultiplier),
+            MaxCount = Math.Max(1, baseConfig.MaxCount * SharedExpeditionSizeMultiplier),
+            MinOffset = Math.Max(1, baseConfig.MinOffset * SharedExpeditionSizeMultiplier),
+            MaxOffset = Math.Max(1, baseConfig.MaxOffset * SharedExpeditionSizeMultiplier),
+        };
+    }
+
+    private static Dungeon MergeDungeons(IReadOnlyList<Dungeon> dungeons)
+    {
+        if (dungeons.Count == 0)
+            return Dungeon.Empty;
+
+        if (dungeons.Count == 1)
+            return dungeons[0];
+
+        var merged = new Dungeon();
+
+        foreach (var source in dungeons)
+        {
+            foreach (var room in source.Rooms)
+            {
+                merged.AddRoom(room);
+            }
+
+            merged.CorridorTiles.UnionWith(source.CorridorTiles);
+            merged.CorridorExteriorTiles.UnionWith(source.CorridorExteriorTiles);
+            merged.Entrances.UnionWith(source.Entrances);
+        }
+
+        merged.RefreshAllTiles();
+        return merged;
+    }
+
     private async Task SpawnRandomEntry(Entity<MapGridComponent> grid, IBudgetEntry entry, Dungeon dungeon, Random random)
     {
         await SuspendIfOutOfTime();
@@ -483,13 +530,15 @@ public sealed class SpawnSalvageMissionJob : Job<bool>
         var structureComp = _entManager.EnsureComponent<SalvageDestructionExpeditionComponent>(mapUid);
         var faction = _prototypeManager.Index<SalvageFactionPrototype>(mission.Faction);
         var difficulty = _prototypeManager.Index(mission.Difficulty);
+        var objectiveTarget = Math.Max(1,
+            difficulty.DestructionStructures * (_missionParams.OpenContract ? SharedObjectiveMultiplier : 1));
 
         var shaggy = faction.Configs["DefenseStructure"];
 
         var availableRooms = new ValueList<DungeonRoom>(dungeon.Rooms);
         var availableTiles = new List<Vector2i>();
 
-        while (availableRooms.Count > 0 && structureComp.Structures.Count < difficulty.DestructionStructures)
+        while (availableRooms.Count > 0 && structureComp.Structures.Count < objectiveTarget)
         {
             availableTiles.Clear();
             var roomIndex = random.Next(availableRooms.Count);

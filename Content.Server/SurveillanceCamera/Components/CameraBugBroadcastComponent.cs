@@ -3,9 +3,9 @@ using Robust.Shared.Prototypes;
 namespace Content.Server.SurveillanceCamera;
 
 /// <summary>
-///     Marker component for the camera bug that enables a toggleable wireless camera broadcast mode.
-///     When broadcasting, a covert camera entity is spawned at the bug's position so remote monitors
-///     can observe the area. Toggling off deletes the spawned entity.
+///     Enables a toggleable wireless broadcast mode on the camera bug item.
+///     When active, a covert entertainment-subnet camera is spawned and parented to the bug,
+///     so remote monitors (TVs) can see and hear the area around it.
 /// </summary>
 [RegisterComponent]
 public sealed partial class CameraBugBroadcastComponent : Component

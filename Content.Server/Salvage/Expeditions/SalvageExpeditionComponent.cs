@@ -15,7 +15,7 @@ namespace Content.Server.Salvage.Expeditions;
 public sealed partial class SalvageExpeditionComponent : SharedSalvageExpeditionComponent
 {
     public SalvageMissionParams MissionParams = default!;
-    
+
     /// <summary>
     /// Consoles sharing this expedition's offer pool economy.
     /// </summary>
@@ -41,6 +41,17 @@ public sealed partial class SalvageExpeditionComponent : SharedSalvageExpedition
     /// Stations currently participating in this expedition.
     /// </summary>
     public HashSet<EntityUid> ParticipantStations = new();
+
+    /// <summary>
+    /// For shared expeditions, stores which shuttle grid each player entity arrived on.
+    /// Used to return bodies to the correct ship when that ship's timer naturally expires.
+    /// </summary>
+    public Dictionary<EntityUid, EntityUid> SharedArrivalShuttles = new();
+
+    /// <summary>
+    /// Per-shuttle expedition end times.
+    /// </summary>
+    public Dictionary<EntityUid, TimeSpan> ShuttleEndTimes = new();
 
     /// <summary>
     /// When the expeditions ends.
@@ -99,4 +110,42 @@ public sealed partial class SalvageExpeditionComponent : SharedSalvageExpedition
     /// </summary>
     [ViewVariables(VVAccess.ReadWrite), DataField]
     public bool Aborted = false;
+
+    /// <summary>
+    /// Shuttles whose departure timer was force-shortened (e.g. early finish / abort) instead of natural timer expiry.
+    /// </summary>
+    [ViewVariables(VVAccess.ReadWrite), DataField]
+    public HashSet<EntityUid> ForcedDepartureShuttles = new();
+
+    // Weather system fields — not serialized; reconstructed when the first shuttle arrives.
+
+    /// <summary>
+    /// Biome ID for this expedition, cached for weather rolling.
+    /// </summary>
+    public string BiomeId = string.Empty;
+
+    /// <summary>
+    /// When the second weather roll fires. TimeSpan.MaxValue means no roll is pending.
+    /// </summary>
+    public TimeSpan WeatherNextRoll = TimeSpan.MaxValue;
+
+    /// <summary>
+    /// Active staged weather phase prototype IDs. Null when no staged weather is in progress.
+    /// </summary>
+    public List<string>? WeatherPhaseSequence;
+
+    /// <summary>
+    /// Current index into WeatherPhaseSequence.
+    /// </summary>
+    public int WeatherPhaseIndex;
+
+    /// <summary>
+    /// When the current weather phase ends and the system should advance to the next phase.
+    /// </summary>
+    public TimeSpan WeatherPhaseEnd;
+
+    /// <summary>
+    /// Duration of each phase in the currently running staged sequence.
+    /// </summary>
+    public TimeSpan WeatherPhaseDuration;
 }

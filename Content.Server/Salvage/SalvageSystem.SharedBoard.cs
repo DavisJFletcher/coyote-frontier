@@ -1,4 +1,5 @@
 using System.Numerics;
+using System.Linq;
 using Content.Server.Salvage.Expeditions;
 using Content.Server.Shuttles.Components;
 using Content.Server.Station.Components;
@@ -23,7 +24,7 @@ public sealed partial class SalvageSystem
         public readonly List<PendingExpeditionClaim> PendingClaims = new();
     }
 
-    private readonly record struct PendingExpeditionClaim(EntityUid Station, EntityUid ConsoleUid);
+    private readonly record struct PendingExpeditionClaim(EntityUid Station, EntityUid ConsoleUid, ushort MissionIndex);
 
     private readonly Dictionary<string, SharedExpeditionBoard> _sharedExpeditionBoards = new();
 
@@ -50,8 +51,8 @@ public sealed partial class SalvageSystem
             return;
 
         board.Cooldown = false;
-        board.CooldownTime = TimeSpan.FromSeconds(_cooldown);
-        board.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(_cooldown);
+        board.CooldownTime = TimeSpan.FromSeconds(SharedExpeditionCooldown);
+        board.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(SharedExpeditionCooldown);
         board.ActiveMission = 0;
         board.JoinableExpedition = null;
         ClearPendingClaims(board);
@@ -100,15 +101,63 @@ public sealed partial class SalvageSystem
     private SalvageExpeditionConsoleState GetState(Entity<SalvageExpeditionConsoleComponent> console, EntityUid? station, SalvageExpeditionDataComponent? stationData)
     {
         var board = EnsureBoard(console.Comp.EconomyId);
-        var missions = new List<SalvageMissionParams>(board.Missions.Values);
+
+        var missions = new List<SalvageMissionParams>();
+
+        if (stationData != null)
+        {
+            ApplySharedMissionOffer(board, stationData.Missions);
+            missions.AddRange(stationData.Missions.Values);
+        }
+
         return new SalvageExpeditionConsoleState(
-            board.NextOffer,
+            stationData?.NextOffer ?? board.NextOffer,
             stationData?.Claimed ?? false,
-            board.Cooldown,
-            board.ActiveMission,
+            stationData?.Cooldown ?? board.Cooldown,
+            stationData?.ActiveMission ?? board.ActiveMission,
             missions,
             stationData?.CanFinish ?? false,
-            board.CooldownTime);
+            stationData?.CooldownTime ?? board.CooldownTime,
+            board.NextOffer,
+            board.CooldownTime,
+            board.Cooldown,
+            false); // Frontier: shared board cooldown independent from private board
+    }
+
+    private static void ApplySharedMissionOffer(SharedExpeditionBoard board, Dictionary<ushort, SalvageMissionParams> stationMissions)
+    {
+        // Sentinel index reserved for the shared open contract slot.
+        const ushort SharedSlotIndex = ushort.MaxValue;
+
+        var sharedMission = GetSharedMissionOffer(board);
+
+        if (sharedMission == null)
+        {
+            stationMissions.Remove(SharedSlotIndex);
+            return;
+        }
+
+        stationMissions[SharedSlotIndex] = sharedMission with
+        {
+            Index = SharedSlotIndex,
+            OpenContract = true,
+            SharedMissionIndex = sharedMission.Index,
+        };
+    }
+
+    private static SalvageMissionParams? GetSharedMissionOffer(SharedExpeditionBoard board)
+    {
+        if (board.ActiveMission != 0 && board.Missions.ContainsKey(board.ActiveMission))
+        {
+            var activeMission = board.Missions[board.ActiveMission];
+            if (activeMission != null)
+                return activeMission;
+        }
+
+        if (board.Missions.Count == 0)
+            return null;
+
+        return board.Missions.Values.MinBy(m => m.Index);
     }
 
     private bool TryGetStationShuttle(EntityUid station, out EntityUid shuttleUid, out MapGridComponent gridComp, out ShuttleComponent shuttleComp)
@@ -218,7 +267,7 @@ public sealed partial class SalvageSystem
         return false;
     }
 
-    private bool TryJoinExistingExpedition(SharedExpeditionBoard board, EntityUid station, EntityUid consoleUid, EntityUid expeditionMap, SalvageExpeditionComponent expedition)
+    private bool TryJoinExistingExpedition(SharedExpeditionBoard board, EntityUid station, EntityUid consoleUid, ushort stationMissionIndex, EntityUid expeditionMap, SalvageExpeditionComponent expedition)
     {
         if (!TryGetStationShuttle(station, out var shuttleUid, out var shuttleGrid, out var shuttleComp))
             return false;
@@ -231,7 +280,7 @@ public sealed partial class SalvageSystem
 
         if (TryComp<SalvageExpeditionDataComponent>(station, out var data))
         {
-            data.ActiveMission = board.ActiveMission;
+            data.ActiveMission = stationMissionIndex;
             data.CanFinish = false;
         }
 

@@ -32,6 +32,7 @@ public sealed partial class SalvageSystem
      */
 
     private const int MissionLimit = 5; // _CS: 3<5
+    private const float SharedExpeditionCooldown = 600f; // Frontier: 10 minutes for open contract board
 
     private readonly JobQueue _salvageQueue = new();
     private readonly List<(SpawnSalvageMissionJob Job, CancellationTokenSource CancelToken)> _salvageJobs = new();
@@ -82,15 +83,7 @@ public sealed partial class SalvageSystem
     private void SetCooldownChange(float obj)
     {
         // Update the active cooldowns if we change it.
-        var diff = obj - _cooldown;
-
-        foreach (var board in _sharedExpeditionBoards.Values)
-        {
-            board.NextOffer += TimeSpan.FromSeconds(diff);
-            board.CooldownTime = TimeSpan.FromSeconds(obj);
-            UpdateEconomyConsoles(board.EconomyId);
-        }
-
+        // Note: shared boards use their own fixed cooldown and are not updated here.
         _cooldown = obj;
     }
 
@@ -114,15 +107,15 @@ public sealed partial class SalvageSystem
 
     private void OnExpeditionMapInit(EntityUid uid, SalvageExpeditionComponent component, MapInitEvent args)
     {
-        // Ensure any old pause cache for a reused map UID cannot affect a fresh expedition.
-        _pausedExpeditionRemaining.Remove(uid);
+        // Ensure any old shuttle pause cache for a reused map UID cannot affect a fresh expedition.
+        ClearPausedShuttleCacheForMap(uid);
         component.SelectedSong = _audio.ResolveSound(component.Sound);
     }
 
     private void OnExpeditionShutdown(EntityUid uid, SalvageExpeditionComponent component, ComponentShutdown args)
     {
-        // Drop pause cache when expedition map is shutting down.
-        _pausedExpeditionRemaining.Remove(uid);
+        // Drop shuttle pause cache when expedition map is shutting down.
+        ClearPausedShuttleCacheForMap(uid);
 
         // component.Stream = _audio.Stop(component.Stream); // _CS: moved to client
 
@@ -166,14 +159,43 @@ public sealed partial class SalvageSystem
                 continue;
 
             board.Cooldown = false;
-            board.NextOffer = currentTime + TimeSpan.FromSeconds(_cooldown);
-            board.CooldownTime = TimeSpan.FromSeconds(_cooldown);
+            board.NextOffer = currentTime + TimeSpan.FromSeconds(SharedExpeditionCooldown);
+            board.CooldownTime = TimeSpan.FromSeconds(SharedExpeditionCooldown);
             board.ActiveMission = 0;
             board.JoinableExpedition = null;
             ClearPendingClaims(board);
             GenerateMissions(board);
+
             UpdateEconomyConsoles(board.EconomyId);
         }
+
+        // _CS: Per-station mission generation
+        var stationDataQuery = EntityQueryEnumerator<SalvageExpeditionDataComponent>();
+        while (stationDataQuery.MoveNext(out var stationUid, out var stationData))
+        {
+            // Frontier: private board regeneration is fully independent from shared board and open contracts.
+            // Skip entirely while any mission (private or open contract) is active.
+            if (stationData.ActiveMission != 0)
+                continue;
+
+            // Regenerate private missions when:
+            // - offers are uninitialized/missing (startup/post-clear)
+            // - OR private timer reaches NextOffer (normal periodic reroll and post-cooldown refresh)
+            var needsRegeneration = stationData.Missions.Count == 0
+                || stationData.NextOffer <= currentTime;
+
+            if (!needsRegeneration)
+                continue;
+
+            stationData.Cooldown = false;
+            // Keep private offer refresh behavior consistent with historical expedition flow:
+            // when offers regenerate, start a new refresh timer for the next reroll.
+            stationData.NextOffer = currentTime + TimeSpan.FromSeconds(_cooldown);
+            stationData.CooldownTime = TimeSpan.FromSeconds(_cooldown);
+            GenerateMissions(stationData);
+            UpdateStationConsoles(stationUid);
+        }
+        // _CS End: Per-station mission generation
     }
 
     private void FinishExpedition(Entity<SalvageExpeditionDataComponent> expedition, SalvageExpeditionComponent expeditionComp, EntityUid uid)
@@ -190,9 +212,17 @@ public sealed partial class SalvageSystem
 
             data.ActiveMission = 0;
             data.CanFinish = false;
-            data.Cooldown = true;
-            data.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(participantCooldownSecs);
-            data.CooldownTime = TimeSpan.FromSeconds(participantCooldownSecs);
+
+            // Frontier: open contract expeditions don't impose a cooldown on individual ship boards;
+            // only the shared board has its own independent cooldown.
+            if (!expeditionComp.MissionParams.OpenContract)
+            {
+                data.Cooldown = true;
+                data.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(participantCooldownSecs);
+                data.CooldownTime = TimeSpan.FromSeconds(participantCooldownSecs);
+            }
+            // End Frontier
+
             UpdateStationConsoles(participant);
         }
 
@@ -204,29 +234,35 @@ public sealed partial class SalvageSystem
                 board.ActiveMission = 0;
 
             board.Cooldown = true;
-            board.Missions.Clear();
-            var boardCooldownSecs = expeditionComp.Completed ? _cooldown : _failedCooldown;
-            board.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(boardCooldownSecs);
-            board.CooldownTime = TimeSpan.FromSeconds(boardCooldownSecs);
+                // Frontier: Missions are intentionally NOT cleared here — they remain visible (disabled) during
+                // cooldown and are replaced with fresh missions when the cooldown timer expires.
+            board.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(SharedExpeditionCooldown);
+            board.CooldownTime = TimeSpan.FromSeconds(SharedExpeditionCooldown);
             ClearPendingClaims(board);
             UpdateEconomyConsoles(board.EconomyId);
         }
 
         expedition.Comp.ActiveMission = 0;
         expedition.Comp.CanFinish = false;
-        // _CS: separate timeout/announcement for success/failures
-        if (expeditionComp.Completed)
+
+        // Keep private board timing fully independent from shared/open-contract completion.
+        if (!expeditionComp.MissionParams.OpenContract)
         {
-            expedition.Comp.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(_cooldown);
-            expedition.Comp.CooldownTime = TimeSpan.FromSeconds(_cooldown);
+            // _CS: separate timeout/announcement for success/failures
+            if (expeditionComp.Completed)
+            {
+                expedition.Comp.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(_cooldown);
+                expedition.Comp.CooldownTime = TimeSpan.FromSeconds(_cooldown);
+            }
+            else
+            {
+                expedition.Comp.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(_failedCooldown);
+                expedition.Comp.CooldownTime = TimeSpan.FromSeconds(_failedCooldown);
+            }
+            // _CS End: separate timeout/announcement for success/failures
+            expedition.Comp.Cooldown = true;
         }
-        else
-        {
-            expedition.Comp.NextOffer = _timing.CurTime + TimeSpan.FromSeconds(_failedCooldown);
-            expedition.Comp.CooldownTime = TimeSpan.FromSeconds(_failedCooldown);
-        }
-        // _CS End: separate timeout/announcement for success/failures
-        expedition.Comp.Cooldown = true;
+
         UpdateConsoles(expedition);
         Announce(uid, announcement);
     }
@@ -298,7 +334,7 @@ public sealed partial class SalvageSystem
             var mission = new SalvageMissionParams
             {
                 Index = board.NextIndex,
-                MissionType = (SalvageMissionType) _random.NextByte((byte) SalvageMissionType.Max + 1),
+                MissionType = SalvageMissionType.Destruction,
                 Seed = _random.Next(),
                 Difficulty = difficulties[i].id,
             };
@@ -374,7 +410,7 @@ public sealed partial class SalvageSystem
 
         foreach (var pending in board.PendingClaims.ToArray())
         {
-            if (TryJoinExistingExpedition(board, pending.Station, pending.ConsoleUid, ev.MapUid, expedition))
+            if (TryJoinExistingExpedition(board, pending.Station, pending.ConsoleUid, pending.MissionIndex, ev.MapUid, expedition))
                 continue;
 
             if (!TryComp<SalvageExpeditionDataComponent>(pending.Station, out var pendingData))

@@ -1,14 +1,14 @@
 using Content.Shared.Verbs;
-using Robust.Server.GameObjects;
-using Robust.Shared.Player;
 using Content.Shared.Popups;
 
 namespace Content.Server.SurveillanceCamera;
 
 /// <summary>
 ///     Handles the camera bug's wireless broadcast toggle.
-///     When enabled, a covert camera entity is spawned and parented to the camera bug,
-///     allowing it to appear on wireless surveillance camera monitors.
+///     When enabled, a covert entertainment-subnet camera entity is spawned and parented
+///     to the camera bug, so TVs and monitors can observe and relay the area around it.
+///     Speech, emotes, and MIDI are picked up by the spawned camera's microphone and
+///     relayed through the normal surveillance camera relay path.
 /// </summary>
 public sealed class CameraBugBroadcastSystem : EntitySystem
 {
@@ -30,14 +30,13 @@ public sealed class CameraBugBroadcastSystem : EntitySystem
             ? Loc.GetString("camera-bug-broadcast-disable")
             : Loc.GetString("camera-bug-broadcast-enable");
 
-        AlternativeVerb verb = new()
+        args.Verbs.Add(new AlternativeVerb
         {
             Text = text,
             Icon = new Robust.Shared.Utility.SpriteSpecifier.Texture(
                 new Robust.Shared.Utility.ResPath("/Textures/Interface/VerbIcons/settings.svg.192dpi.png")),
             Act = () => ToggleBroadcast(uid, component, args.User)
-        };
-        args.Verbs.Add(verb);
+        });
     }
 
     private void ToggleBroadcast(EntityUid uid, CameraBugBroadcastComponent component, EntityUid user)

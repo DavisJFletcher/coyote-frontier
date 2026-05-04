@@ -170,6 +170,10 @@
 #    range: 200
   - type: DeviceNetworkRequiresPower
   - type: Speech
+  - type: Instrument
+    allowPercussion: true
+    allowProgramChange: true
+    respectMidiLimits: false
   - type: SurveillanceCameraSpeaker
     requiresEntertainmentCamera: true # Frontier: only relay speech from entertainment cameras
   - type: SurveillanceCameraMonitor

@@ -18,8 +18,12 @@ public sealed class SalvageExpeditionConsoleState : BoundUserInterfaceState
     public List<SalvageMissionParams> Missions;
     public bool CanFinish; // _CS
     public TimeSpan CooldownTime; // _CS: separate fail vs. success time
+    public TimeSpan SharedNextOffer; // Frontier: shared open contract timer
+    public TimeSpan SharedCooldownTime; // Frontier: shared open contract cooldown
+    public bool SharedBoardCooldown; // Frontier: shared board cooldown flag (independent from private board)
+    public bool FtlLocked; // Frontier: lock claiming while shuttle FTL is recharging without mutating cooldown timer state
 
-    public SalvageExpeditionConsoleState(TimeSpan nextOffer, bool claimed, bool cooldown, ushort activeMission, List<SalvageMissionParams> missions, bool canFinish, TimeSpan cooldownTime) // _CS: add canFinish, cooldownTime
+    public SalvageExpeditionConsoleState(TimeSpan nextOffer, bool claimed, bool cooldown, ushort activeMission, List<SalvageMissionParams> missions, bool canFinish, TimeSpan cooldownTime, TimeSpan sharedNextOffer, TimeSpan sharedCooldownTime, bool sharedBoardCooldown, bool ftlLocked) // _CS: add canFinish, cooldownTime
     {
         NextOffer = nextOffer;
         Claimed = claimed;
@@ -28,6 +32,10 @@ public sealed class SalvageExpeditionConsoleState : BoundUserInterfaceState
         Missions = missions;
         CanFinish = canFinish; // _CS
         CooldownTime = cooldownTime; // _CS
+        SharedNextOffer = sharedNextOffer; // Frontier
+        SharedCooldownTime = sharedCooldownTime; // Frontier
+        SharedBoardCooldown = sharedBoardCooldown; // Frontier
+        FtlLocked = ftlLocked; // Frontier
     }
 }
 
@@ -130,6 +138,12 @@ public sealed record SalvageMissionParams
 {
     [ViewVariables]
     public ushort Index;
+
+    [ViewVariables]
+    public bool OpenContract;
+
+    [ViewVariables]
+    public ushort SharedMissionIndex;
 
     [ViewVariables(VVAccess.ReadWrite)] public int Seed;
 
