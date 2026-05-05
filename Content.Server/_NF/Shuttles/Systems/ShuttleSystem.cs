@@ -10,6 +10,7 @@ using Content.Server.Chat.Managers;
 using Content.Server.Chat.Systems;
 using Content.Server.Popups;
 using Content.Server.Power.EntitySystems;
+using Content.Server._NF.Radar;
 using Content.Server.Shuttles.Components;
 using Content.Shared._CS;
 using Content.Shared._NF.Shuttles.Events;
@@ -20,6 +21,8 @@ using Content.Shared.Mind.Components;
 using Content.Shared.Mobs.Systems;
 using Content.Shared.Popups;
 using Content.Shared.Shuttles.Components;
+using Content.Server._CS.ShuttleCrewStatus;
+using System.Numerics;
 using Robust.Server.Player;
 using Robust.Shared.Audio;
 using Robust.Shared.Audio.Systems;
@@ -30,7 +33,18 @@ namespace Content.Server.Shuttles.Systems;
 
 public sealed partial class ShuttleSystem
 {
+    private const float MinProximityAlertRadius = 1f;
+    private const float MinProximityPingInterval = 0.25f;
+    private const float MaxProximityPingInterval = 2.5f;
+    private const float ProximityPingStepMeters = 30f;
+    private const float ProximityInitialIntervalMultiplier = 2f;
+    private static readonly TimeSpan ProximityScanInterval = TimeSpan.FromSeconds(0.2f);
+    private static readonly TimeSpan ProximityInitialToPingDelay = TimeSpan.FromSeconds(0.5f);
+    private static readonly SoundPathSpecifier ProximityInitialSound = new("/Audio/_Mono/Effects/Computer/beep_series1.ogg");
+    private static readonly SoundPathSpecifier ProximityPingSound = new("/Audio/_Mono/Effects/Computer/short_beep2.ogg");
+
     [Dependency] private readonly RadarConsoleSystem _radarConsole = default!;
+    [Dependency] private readonly RadarBlipSystem _radarBlips = default!;
     [Dependency] private readonly MobStateSystem _mobState = default!;
     [Dependency] private readonly IPlayerManager _players = default!;
     [Dependency] private readonly PopupSystem _popupSystem = null!;
@@ -45,6 +59,8 @@ public sealed partial class ShuttleSystem
         SubscribeLocalEvent<ShuttleConsoleComponent, SetServiceFlagsRequest>(NfSetServiceFlags);
         SubscribeLocalEvent<ShuttleConsoleComponent, SetTargetCoordinatesRequest>(NfSetTargetCoordinates);
         SubscribeLocalEvent<ShuttleConsoleComponent, SetHideTargetRequest>(NfSetHideTarget);
+        SubscribeLocalEvent<ShuttleConsoleComponent, SetProximityAlertRequest>(NfSetProximityAlert);
+        SubscribeLocalEvent<ShuttleConsoleComponent, SetProximityAlertRadiusRequest>(NfSetProximityAlertRadius);
     }
 
     private bool SetInertiaDampening(
@@ -215,9 +231,40 @@ public sealed partial class ShuttleSystem
         if (!EntityManager.TryGetComponent<IFFComponent>(gridUid, out var iffComponent))
             return;
 
-        iffComponent.ServiceFlags = args.ServiceFlags;
+        var newFlags = args.ServiceFlags;
+
+        // Interdiction state is mutually exclusive.
+        if (newFlags.HasFlag(ServiceFlags.InterdictionsEnabled))
+            newFlags &= ~ServiceFlags.InterdictionsDisabled;
+        else if (newFlags.HasFlag(ServiceFlags.InterdictionsDisabled))
+            newFlags &= ~ServiceFlags.InterdictionsEnabled;
+
+        iffComponent.ServiceFlags = newFlags;
+
+        if (TryComp<ShuttleCrewStatusComponent>(gridUid, out var crewStatus))
+            iffComponent.Color = GetInterdictionDisplayColor(newFlags, crewStatus.HasActiveCrew, crewStatus.OriginalColor ?? Color.White);
+        else
+            iffComponent.Color = GetInterdictionDisplayColor(newFlags, true, Color.White);
+
         _console.RefreshShuttleConsoles(gridUid);
         Dirty(gridUid, iffComponent);
+    }
+
+    private static Color GetInterdictionDisplayColor(ServiceFlags flags, bool hasActiveCrew, Color fallback)
+    {
+        if (flags.HasFlag(ServiceFlags.InterdictionsEnabled))
+        {
+            var value = hasActiveCrew ? 1.0f : 0.5f;
+            return Color.FromHsv(new Vector4(0.90f, 0.75f, value, 1f));
+        }
+
+        if (flags.HasFlag(ServiceFlags.InterdictionsDisabled))
+        {
+            var value = hasActiveCrew ? 0.70f : 0.40f;
+            return Color.FromHsv(new Vector4(0.78f, 0.70f, value, 1f));
+        }
+
+        return hasActiveCrew ? fallback : Color.Gray;
     }
 
     public void NfSetTargetCoordinates(EntityUid uid, ShuttleConsoleComponent component, SetTargetCoordinatesRequest args)
@@ -251,6 +298,103 @@ public sealed partial class ShuttleSystem
 
         _radarConsole.SetHideTarget((uid, radarConsole), args.Hidden);
         _console.RefreshShuttleConsoles(gridUid);
+    }
+
+    public void NfSetProximityAlert(EntityUid uid, ShuttleConsoleComponent component, SetProximityAlertRequest args)
+    {
+        var transform = Transform(uid);
+        if (!transform.GridUid.HasValue)
+            return;
+
+        component.ProximityAlertEnabled = args.Enabled;
+        component.NextProximityAlert = TimeSpan.Zero;
+        component.NextProximityScan = TimeSpan.Zero;
+        component.HasProximityContact = false;
+        component.CachedNearestProximityDistance = float.MaxValue;
+        Dirty(uid, component);
+        _console.RefreshShuttleConsoles(transform.GridUid.Value);
+    }
+
+    public void NfSetProximityAlertRadius(EntityUid uid, ShuttleConsoleComponent component, SetProximityAlertRadiusRequest args)
+    {
+        var transform = Transform(uid);
+        if (!transform.GridUid.HasValue)
+            return;
+
+        // Radius is locked while active to avoid unstable timing updates from rapid slider changes.
+        if (component.ProximityAlertEnabled)
+            return;
+
+        component.ProximityAlertRadius = MathF.Max(MinProximityAlertRadius, args.Radius);
+        component.NextProximityAlert = TimeSpan.Zero;
+        component.NextProximityScan = TimeSpan.Zero;
+        component.HasProximityContact = false;
+        component.CachedNearestProximityDistance = float.MaxValue;
+        Dirty(uid, component);
+        _console.RefreshShuttleConsoles(transform.GridUid.Value);
+    }
+
+    private void NfUpdateProximityAlerts()
+    {
+        var curTime = _gameTiming.CurTime;
+        var consoleQuery = EntityQueryEnumerator<ShuttleConsoleComponent, RadarConsoleComponent>();
+
+        while (consoleQuery.MoveNext(out var uid, out var console, out var radar))
+        {
+            // Keep alarm behavior active while enabled, even if nobody is currently using the console UI.
+            if (!console.ProximityAlertEnabled)
+                continue;
+
+            if (console.NextProximityScan == TimeSpan.Zero || curTime >= console.NextProximityScan)
+            {
+                console.NextProximityScan = curTime + ProximityScanInterval;
+
+                if (_radarBlips.TryGetNearestContactDistance((uid, radar), console.ProximityAlertRadius, out var nearestContactDistance))
+                {
+                    console.HasProximityContact = true;
+                    console.CachedNearestProximityDistance = nearestContactDistance;
+                }
+                else
+                {
+                    console.HasProximityContact = false;
+                    console.CachedNearestProximityDistance = float.MaxValue;
+                    console.NextProximityAlert = TimeSpan.Zero;
+                }
+            }
+
+            if (!console.HasProximityContact)
+                continue;
+
+            var nearestDistance = console.CachedNearestProximityDistance;
+
+            if (console.NextProximityAlert == TimeSpan.Zero)
+            {
+                var initialParams = AudioParams.Default.WithVolume(-4f).WithMaxDistance(10f);
+                _audio.PlayPvs(ProximityInitialSound, uid, initialParams);
+                console.NextProximityAlert = curTime + ProximityInitialToPingDelay;
+                continue;
+            }
+
+            if (console.NextProximityAlert != TimeSpan.Zero && curTime < console.NextProximityAlert)
+                continue;
+
+            var interval = CalculateProximityPingInterval(nearestDistance, console.ProximityAlertRadius);
+            var audioParams = AudioParams.Default.WithVolume(-4f).WithMaxDistance(10f);
+            _audio.PlayPvs(ProximityPingSound, uid, audioParams);
+            console.NextProximityAlert = curTime + TimeSpan.FromSeconds(interval);
+        }
+    }
+
+    private static float CalculateProximityPingInterval(float nearestDistance, float scanRadius)
+    {
+        _ = scanRadius; // Detection range gate is handled before this call; cadence is distance-based.
+
+        var clampedDistance = MathF.Max(0f, nearestDistance);
+
+        // 30m distance bands from center: each band farther away halves BPM (doubles interval).
+        var distanceBands = (int) MathF.Floor(clampedDistance / ProximityPingStepMeters);
+        var interval = MinProximityPingInterval * ProximityInitialIntervalMultiplier * MathF.Pow(2f, distanceBands);
+        return Math.Clamp(interval, MinProximityPingInterval, MaxProximityPingInterval * ProximityInitialIntervalMultiplier);
     }
 
     /// <summary>

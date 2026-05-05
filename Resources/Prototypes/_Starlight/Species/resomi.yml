@@ -10,28 +10,26 @@
   femaleFirstNames: names_resomi_first
   lastNames: names_resomi_packs
   naming: FirstLast
-  dollPrototype: MobResomiDummy
+  dollPrototype: AppearanceResomi
   skinColoration: Hues
   minAge: 23
   youngAge: 103
   oldAge: 257
   maxAge: 430
-  # CS: CustomName cause error
-  # CS: Small enough to fit in a bag, maybe too small even
-  minHeight: 0.7
-  defaultHeight: 1
-  minWidth: 0.65
-  defaultWidth: 1
-  # End CS
-  # CS: More properties
-  sexes:
-  - Unsexed
-  - Male
-  - Female
+  # Coyote: custom name no workie :(
+  # Coyote: Small enough to fit in a bag
+  minHeight: 0.6
+  defaultHeight: 0.8
+  maxHeight: 1.1
+  minWidth: 0.55
+  defaultWidth: 0.8
+  maxWidth: 1.15
+  # End Coyote
+  # Coyote: Add kind for markings
   kind:
-  - RaptorLike
-  allowDigilegDisplacement: false
-  # End CS
+    - BasicHumanlike
+    - BasicFurry
+  # End Coyote
 
 - type: speciesBaseSprites
   id: MobResomiSprites
@@ -55,42 +53,23 @@
     Special: MobHumanoidAnyMarking
     Tail: MobHumanoidAnyMarking
     TailExtras: MobHumanoidAnyMarking
+    # Coyote Start
+    TailBehind: MobHumanoidAnyMarking
+    TailOversuit: MobHumanoidAnyMarking
+    FacialHair: MobHumanoidAnyMarking
+    Snout: MobHumanoidAnyMarking
+    Genital: MobHumanoidAnyMarking
+    RArmExtension: MobHumanoidAnyMarking # Adds Wing Slot, this will look weird as fuck
+    # End Coyote
 
 - type: markingPoints
   id: MobResomiMarkingLimits
-  # CS: ALlow all markings
   points:
-    Special:
-      points: 10
-      required: false
-    Hair:
-      points: 1
-      required: false
-    TailExtras:
-      points: 3
-      required: false
+    # Coyote: Allow unlimited markings
     Tail:
-      points: 1
       required: true
+      points: 999 # Coyote: Allow unlimited markings
       defaultMarkings: [ ResomiTailFeathered ]
-    Legs:
-      points: 6
-      required: false
-    Arms:
-      points: 6
-      required: false
-    Head:
-      points: 4
-      required: false
-    HeadTop:
-      points: 4
-      required: false
-    HeadSide:
-      points: 2
-      required: false
-    Chest:
-      points: 4
-      required: false
 
 - type: humanoidBaseSprite
   id: MobResomiEyes

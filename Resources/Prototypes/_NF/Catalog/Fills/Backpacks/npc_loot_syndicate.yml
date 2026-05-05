@@ -191,6 +191,8 @@
   - type: SpawnItemsOnUse
     items:
       - id: NFWeaponEnergyPistolLaserAdvancedExpedition
+      - id: ClothingOuterHardsuitSyndieElite
+        prob: 0.067
       - id: SpaceCash2500
       # Bonus Loot T3
       - id: SpaceCash1000
@@ -219,6 +221,8 @@
   - type: SpawnItemsOnUse
     items:
       - id: NFWeaponEnergyPistolLaserExpedition
+      - id: ClothingOuterHardsuitSyndieElite
+        prob: 0.067
       - id: SpaceCash2500
       # Bonus Loot T3
       - id: SpaceCash1000
@@ -304,6 +308,8 @@
   - type: SpawnItemsOnUse
     items:
       - id: NFWeaponRifleAssaultSmExpedition
+      - id: ClothingOuterHardsuitSyndieElite
+        prob: 0.067
       - id: NFMagazineRifle30Uranium
       - id: NFMagazineRifle30Uranium
         prob: 0.2
@@ -419,8 +425,8 @@
   - type: SpawnItemsOnUse
     items:
       - id: NFWeaponSubMachineGunC20rExpedition
-      - id: CSMagazineSubMachineGun40Uranium # CS: NFMagazineSubMachineGun35Uranium < CSMagazineSubMachineGun40Uranium
-      - id: CSMagazineSubMachineGun40Uranium # CS: NFMagazineSubMachineGun35Uranium < CSMagazineSubMachineGun40Uranium
+      - id: CSMagazineSubMachineGun40Uranium # Coyote: NFMagazineSubMachineGun35Uranium < CSMagazineSubMachineGun40Uranium
+      - id: CSMagazineSubMachineGun40Uranium # Coyote: NFMagazineSubMachineGun35Uranium < CSMagazineSubMachineGun40Uranium
         prob: 0.2
       - id: SpaceCash1000
       - id: SpaceCash1000
@@ -541,8 +547,8 @@
   - type: SpawnItemsOnUse
     items:
       - id: NFWeaponPistolViperExpedition
-      - id: CSMagazinePistol40Uranium # CS: .40 conversion
-      - id: CSMagazinePistol40Uranium # CS: .40 conversion
+      - id: CSMagazinePistol40Uranium # Coyote: .40 conversion
+      - id: CSMagazinePistol40Uranium # Coyote: .40 conversion
         prob: 0.2
       - id: SpaceCash1000
       # Bonus Loot T1

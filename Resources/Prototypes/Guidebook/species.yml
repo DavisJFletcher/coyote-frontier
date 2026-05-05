@@ -21,12 +21,12 @@
     - Feroxi # Flooftier
     - Rodentia # Flooftier
     - Avali # Starlight
-    - Resomi
+    - Resomi # Starlight
     # Den addition
     - Ovinia
     - Chitinid # DeltaV # DeltaV
     - Tajaran # EE
-    - Anthromorph # CS
+    - Anthromorph # Coyote
 
 - type: guideEntry
   id: Arachnid
@@ -85,10 +85,11 @@
   name: species-name-avali
   text: "/ServerInfo/Guidebook/Mobs/_Starlight/Avali.xml"
 
+# Coyote
 - type: guideEntry
   id: Resomi
   name: species-name-resomi
-  text: "/ServerInfo/Guidebook/Mobs/Resomi.xml"
+  text: "/ServerInfo/Guidebook/Mobs/_CS/Resomi.xml"
 
 - type: guideEntry
   id: Tajaran

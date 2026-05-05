@@ -8,12 +8,12 @@
   defaultSkinTone: "#747474"
   markingLimits: MobRodentiaMarkingLimits
   dollPrototype: MobRodentiaDummy
-  # CS: Small enough to fit in a bag
+  # Coyote: Small enough to fit in a bag
   minHeight: 0.6
   defaultHeight: 0.8
   minWidth: 0.55
   defaultWidth: 0.8
-  # End CS
+  # End Coyote
   skinColoration: Hues
   maleFirstNames: NamesRodentiaMale
   femaleFirstNames: NamesRodentiaFemale
@@ -60,83 +60,15 @@
 - type: markingPoints
   id: MobRodentiaMarkingLimits
   points:
-    Hair:
-      points: 35
-      required: false
-    FacialHair:
-      points: 35
-      required: false
+    # Coyote: Allow unlimited markings
     Tail:
-      points: 35
+      points: 999 # Coyote: Allow unlimited markings
       required: true
       defaultMarkings: [ RodentiaTailDefault ]
-    Legs:
-      points: 35
-      required: false
-    Arms:
-      points: 35
-      required: false
-    Snout:
-      points: 35
-      required: false
     HeadTop:
-      points: 35
+      points: 999 # Coyote: Allow unlimited markings
       required: true
       defaultMarkings: [ RodentiaHeadTopEarDefault ]
-    HeadSide:
-      points: 35
-      required: false
-    Chest:
-      points: 35
-      required: false
-    Head:
-      points: 35
-      required: false
-    Overlay:
-      points: 35
-      required: false
-    # Frontier: apparently these don't exist on Delta
-    UndergarmentTop:
-      points: 35
-      required: false
-    UndergarmentBottom:
-      points: 35
-      required: false
-    # End Frontier
-    Special: # the cat ear joke
-      points: 35
-      required: false
-    # Copypaste these into every species I HATE THIS CODE
-    BaseChest:
-      points: 35
-      required: false
-    BaseHead:
-      points: 35
-      required: false
-    BaseLArm:
-      points: 35
-      required: false
-    BaseLFoot:
-      points: 35
-      required: false
-    BaseLHand:
-      points: 35
-      required: false
-    BaseLLeg:
-      points: 35
-      required: false
-    BaseRArm:
-      points: 35
-      required: false
-    BaseRFoot:
-      points: 35
-      required: false
-    BaseRHand:
-      points: 35
-      required: false
-    BaseRLeg:
-      points: 35
-      required: false
 
 - type: humanoidBaseSprite
   id: MobRodentiaHead

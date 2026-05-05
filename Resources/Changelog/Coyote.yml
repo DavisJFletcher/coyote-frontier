@@ -2591,3 +2591,112 @@ Entries:
   id: 297
   time: '2026-04-20T04:42:45.0000000+00:00'
   url: https://github.com/ARF-SS13/coyote-frontier/pull/1169
+- author: Superlagg
+  changes:
+    - type: Tweak
+      message: Nerfed RPI and capturebait cus it was pretty ridonculous.
+  id: 298
+  time: '2026-04-23T01:07:28.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1174
+- author: Khaomi
+  changes:
+    - type: Fix
+      message: avali markings have so much restriction
+  id: 299
+  time: '2026-04-23T02:19:47.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1173
+- author: QTNeen
+  changes:
+    - type: Add
+      message: Field matrix cores
+    - type: Add
+      message: Alpha & Emissive sliders for markings
+  id: 300
+  time: '2026-04-23T05:41:07.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1172
+- author: QTNeen
+  changes:
+    - type: Add
+      message: Radar scanner to shuttle console
+    - type: Tweak
+      message: Andy mute option
+  id: 301
+  time: '2026-04-24T04:41:46.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1176
+- author: Khaomi
+  changes:
+    - type: Fix
+      message: 'Fix Resomi and Avali not being ported correctly from Starlight '
+  id: 302
+  time: '2026-04-27T04:02:12.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1177
+- author: Khaomi
+  changes:
+    - type: Tweak
+      message: Markings are now unlocked, all speices can have any kind of markings
+  id: 303
+  time: '2026-04-30T04:04:37.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1178
+- author: Khaomi
+  changes:
+    - type: Fix
+      message: Hardsuit textures
+  id: 304
+  time: '2026-04-30T06:11:37.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1180
+- author: QTNeen
+  changes:
+    - type: Add
+      message: >-
+        Interdiction option in shuttle console. No preference by default |
+        Enabled = Yes Pirates | Disabled = No Pirates 
+    - type: Tweak
+      message: NPC pathing adjusted, they don't give up chase as easily.
+    - type: Add
+      message: Heat & Rut to the custom character examine to be more easily toggled.
+    - type: Tweak
+      message: Expedition NPCs no longer become dumb on shuttles. Be careful..
+    - type: Add
+      message: '''Khonsu'' up for sale in the Scrapyard.'
+    - type: Add
+      message: Emote Configuration added to Trait tab in Character Setup
+  id: 305
+  time: '2026-04-30T06:32:45.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1179
+- author: QTNeen
+  changes:
+    - type: Add
+      message: Scaling options for genital markings
+  id: 306
+  time: '2026-04-30T06:46:12.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1182
+- author: QTNeen
+  changes:
+    - type: Tweak
+      message: NPC death logic issue corrected
+  id: 307
+  time: '2026-05-01T03:42:48.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1186
+- author: Khaomi
+  changes:
+    - type: Fix
+      message: Fix NASH Station having New Frontier logo
+  id: 308
+  time: '2026-05-01T03:44:36.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1185
+- author: Khaomi
+  changes:
+    - type: Fix
+      message: Fixed Avali and Resomi not having hunger and thrist
+  id: 309
+  time: '2026-05-01T05:18:14.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1183
+- author: LateFinny
+  changes:
+    - type: Fix
+      message: Fixes Shelegs being able to be injected with hyposprays.
+    - type: Fix
+      message: Fixed a minor oversight in hypospray code.
+  id: 310
+  time: '2026-05-04T04:19:51.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1187

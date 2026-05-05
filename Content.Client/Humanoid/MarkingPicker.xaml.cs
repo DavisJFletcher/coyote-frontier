@@ -9,6 +9,7 @@ using Robust.Client.UserInterface.XAML;
 using Robust.Client.Utility;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Utility;
+using System.Numerics;
 using System.Linq;
 using static Robust.Client.UserInterface.Controls.BoxContainer;
 
@@ -30,6 +31,12 @@ public sealed partial class MarkingPicker : Control
     public Action<HumanoidLegStyle>? OnLegStyleChanged;
 
     private List<Color> _currentMarkingColors = new();
+    private List<float> _currentMarkingGlow = new();
+    // Coyote Start
+    private float _currentMarkingScale = 1.0f;
+    private float _currentMarkingOffsetX;
+    private float _currentMarkingOffsetY;
+    // Coyote End
 
     private ItemList.Item? _selectedMarking;
     private ItemList.Item? _selectedUnusedMarking;
@@ -57,7 +64,7 @@ public sealed partial class MarkingPicker : Control
 
     public string IgnoreCategories
     {
-        get => string.Join(',',  _ignoreCategories);
+        get => string.Join(',', _ignoreCategories);
         set
         {
             _ignoreCategories.Clear();
@@ -170,6 +177,7 @@ public sealed partial class MarkingPicker : Control
 
         CanPutOnToggle.OnToggled += x => SetCanToggle(x.Pressed);
         CanPutOnByOtherToggle.OnToggled += x => SetOtherCanToggle(x.Pressed);
+        HideTogglePopupToggle.OnToggled += x => SetHideTogglePopup(x.Pressed);
         StartVisibleToggle.OnToggled += x => SetVisible(x.Pressed);
         RenderOverClothingToggle.OnToggled += x => SetRenderOverClothing(x.Pressed);
 
@@ -224,10 +232,10 @@ public sealed partial class MarkingPicker : Control
 
         foreach (var legStyle in _availableLegStyles)
         {
-            CMarkingLegStyle.AddItem(Loc.GetString($"humanoid-leg-style-{legStyle.ToString()}"), (int) legStyle);
+            CMarkingLegStyle.AddItem(Loc.GetString($"humanoid-leg-style-{legStyle.ToString()}"), (int)legStyle);
         }
 
-        CMarkingLegStyle.SelectId((int) CurrentLegStyle);
+        CMarkingLegStyle.SelectId((int)CurrentLegStyle);
     }
 
     private string GetMarkingName(MarkingPrototype marking) => Loc.GetString($"marking-{marking.ID}");
@@ -319,7 +327,7 @@ public sealed partial class MarkingPicker : Control
             var text = Loc.GetString(marking.Forced ? "marking-used-forced" : "marking-used", ("marking-name", $"{GetMarkingName(newMarking)}"),
                 ("marking-category", Loc.GetString($"markings-category-{newMarking.MarkingCategory}")));
 
-            var _item = new ItemList.Item(CMarkingsUsed)
+            var item = new ItemList.Item(CMarkingsUsed)
             {
                 Text = text,
                 Icon = _sprite.Frame0(newMarking.Sprites[0]),
@@ -328,7 +336,7 @@ public sealed partial class MarkingPicker : Control
                 IconModulate = marking.MarkingColors[0]
             };
 
-            CMarkingsUsed.Add(_item);
+            CMarkingsUsed.Add(item);
         }
 
         // since all the points have been processed, update the points visually
@@ -453,7 +461,7 @@ public sealed partial class MarkingPicker : Control
     private void OnUsedMarkingSelected(ItemList.ItemListSelectedEventArgs item)
     {
         _selectedMarking = CMarkingsUsed[item.ItemIndex];
-        var prototype = (MarkingPrototype) _selectedMarking.Metadata!;
+        var prototype = (MarkingPrototype)_selectedMarking.Metadata!;
         int markingIndex = _currentMarkings.FindIndexOf(_selectedMarkingCategory, prototype.ID);
 
         if (markingIndex < 0) return;
@@ -469,8 +477,8 @@ public sealed partial class MarkingPicker : Control
 
         var stateNames = GetMarkingStateNames(prototype);
         _currentMarkingColors.Clear();
+        _currentMarkingGlow.Clear();
         CMarkingColors.DisposeAllChildren();
-        List<ColorSelectorSliders> colorSliders = new();
         for (int i = 0; i < prototype.Sprites.Count; i++)
         {
             // first, check if the coloration is parented to another marking
@@ -501,11 +509,11 @@ public sealed partial class MarkingPicker : Control
             // this is a problem if we, say, want to *not* show a certain slider
             // cus then it'll modify the wrong color, unless the color happened to
             // be in index 0.
-            if(!skipdraw)
+            if (!skipdraw)
                 CMarkingColors.AddChild(colorContainer);
 
             ColorSelectorSliders colorSelector = new ColorSelectorSliders();
-            colorSliders.Add(colorSelector);
+            colorSelector.IsAlphaVisible = true;
 
             colorContainer.AddChild(new Label { Text = $"{stateNames[i]} color:" });
             colorContainer.AddChild(colorSelector);
@@ -516,10 +524,13 @@ public sealed partial class MarkingPicker : Control
             var currentColor = new Color(
                 color.RByte,
                 color.GByte,
-                color.BByte
+                color.BByte,
+                color.AByte
             );
             colorSelector.Color = currentColor;
             _currentMarkingColors.Add(currentColor);
+            var currentGlow = i < marking.MarkingGlow.Count ? marking.MarkingGlow[i] : 0f;
+            _currentMarkingGlow.Add(Math.Clamp(currentGlow, 0f, 1f));
             var colorIndex = _currentMarkingColors.Count - 1;
 
             Action<Color> colorChanged = _ =>
@@ -529,13 +540,259 @@ public sealed partial class MarkingPicker : Control
                 ColorChanged(colorIndex);
             };
             colorSelector.OnColorChanged += colorChanged;
+
+            if (skipdraw)
+                continue;
+
+            var glowRow = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Horizontal,
+                SeparationOverride = 8,
+            };
+            var glowLabel = new Label
+            {
+                Text = Loc.GetString("marking-glow-label"),
+            };
+            var glowSlider = new Slider
+            {
+                HorizontalExpand = true,
+                MinValue = 0f,
+                MaxValue = 1f,
+                Rounded = false,
+            };
+            // Coyote Start
+            var glowValueBox = new SpinBox
+            {
+                MinSize = new Vector2(56f, 0f),
+                IsValid = value => value is >= 0 and <= 100,
+            };
+            glowValueBox.InitDefaultButtons();
+
+            var settingGlowFromInput = false;
+            var settingGlowFromSlider = false;
+            var initialGlow = Math.Clamp(_currentMarkingGlow[colorIndex], 0f, 1f);
+            glowSlider.SetValueWithoutEvent(initialGlow);
+            glowValueBox.Value = (int)MathF.Round(initialGlow * 100f);
+
+            glowSlider.OnValueChanged += _ =>
+            {
+                if (settingGlowFromInput)
+                    return;
+
+                settingGlowFromSlider = true;
+                var normalizedGlow = Math.Clamp(glowSlider.Value, 0f, 1f);
+                _currentMarkingGlow[colorIndex] = normalizedGlow;
+                glowValueBox.Value = (int)MathF.Round(normalizedGlow * 100f);
+                GlowChanged(colorIndex);
+                settingGlowFromSlider = false;
+            };
+
+            glowValueBox.ValueChanged += _ =>
+            {
+                if (settingGlowFromSlider)
+                    return;
+
+                settingGlowFromInput = true;
+                var clampedPercent = Math.Clamp(glowValueBox.Value, 0, 100);
+                var normalizedGlow = clampedPercent / 100f;
+                _currentMarkingGlow[colorIndex] = normalizedGlow;
+                glowSlider.SetValueWithoutEvent(normalizedGlow);
+                GlowChanged(colorIndex);
+                settingGlowFromInput = false;
+            };
+            // Coyote End
+
+            glowRow.AddChild(glowLabel);
+            glowRow.AddChild(glowSlider);
+            glowRow.AddChild(glowValueBox);
+            colorContainer.AddChild(glowRow);
         }
 
         CustomNameTextEdit.Text = marking.CustomName ?? "";
+
+        // Coyote Start
+        _currentMarkingScale = marking.MarkingScale;
+        _currentMarkingOffsetX = marking.MarkingOffset.X;
+        _currentMarkingOffsetY = marking.MarkingOffset.Y;
+        if (_selectedMarkingCategory == MarkingCategories.Genital)
+        {
+            var scaleButton = new Button
+            {
+                Text = Loc.GetString("marking-adjust-scale-text"),
+            };
+            var scaleBox = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Vertical,
+                Visible = false,
+            };
+            var scaleRow = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Horizontal,
+                SeparationOverride = 8,
+            };
+            var offsetXRow = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Horizontal,
+                SeparationOverride = 8,
+            };
+            var offsetYRow = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Horizontal,
+                SeparationOverride = 8,
+            };
+            var scaleLabel = new Label
+            {
+                Text = Loc.GetString("marking-scale-label"),
+            };
+            var scaleSlider = new Slider
+            {
+                HorizontalExpand = true,
+                MinValue = 0.25f,
+                MaxValue = 3.0f,
+                Rounded = false,
+            };
+            var offsetXSlider = new Slider
+            {
+                HorizontalExpand = true,
+                MinValue = -1.0f,
+                MaxValue = 1.0f,
+                Rounded = false,
+            };
+            var offsetYSlider = new Slider
+            {
+                HorizontalExpand = true,
+                MinValue = -1.0f,
+                MaxValue = 1.0f,
+                Rounded = false,
+            };
+            var scaleValueBox = new SpinBox
+            {
+                MinSize = new Vector2(56f, 0f),
+                IsValid = value => value is >= 25 and <= 300,
+            };
+            var offsetXValueBox = new SpinBox
+            {
+                MinSize = new Vector2(56f, 0f),
+                IsValid = value => value is >= -100 and <= 100,
+            };
+            var offsetYValueBox = new SpinBox
+            {
+                MinSize = new Vector2(56f, 0f),
+                IsValid = value => value is >= -100 and <= 100,
+            };
+            scaleValueBox.InitDefaultButtons();
+            offsetXValueBox.InitDefaultButtons();
+            offsetYValueBox.InitDefaultButtons();
+
+            var settingScaleFromInput = false;
+            var settingScaleFromSlider = false;
+            var initialScale = Math.Clamp(_currentMarkingScale, 0.25f, 3.0f);
+            scaleSlider.SetValueWithoutEvent(initialScale);
+            scaleValueBox.Value = (int)MathF.Round(initialScale * 100f);
+
+            var settingOffsetFromInput = false;
+            var settingOffsetFromSlider = false;
+
+            var initialOffsetX = Math.Clamp(_currentMarkingOffsetX, -1.0f, 1.0f);
+            var initialOffsetY = Math.Clamp(_currentMarkingOffsetY, -1.0f, 1.0f);
+
+            offsetXSlider.SetValueWithoutEvent(initialOffsetX);
+            offsetYSlider.SetValueWithoutEvent(initialOffsetY);
+
+            offsetXValueBox.Value = (int)MathF.Round(initialOffsetX * 100f);
+            offsetYValueBox.Value = (int)MathF.Round(initialOffsetY * 100f);
+
+            scaleSlider.OnValueChanged += _ =>
+            {
+                if (settingScaleFromInput)
+                    return;
+
+                settingScaleFromSlider = true;
+                _currentMarkingScale = Math.Clamp(scaleSlider.Value, 0.25f, 3.0f);
+                scaleValueBox.Value = (int)MathF.Round(_currentMarkingScale * 100f);
+                ScaleChanged();
+                settingScaleFromSlider = false;
+            };
+
+            scaleValueBox.ValueChanged += _ =>
+            {
+                if (settingScaleFromSlider)
+                    return;
+
+                settingScaleFromInput = true;
+                var clampedPercent = Math.Clamp(scaleValueBox.Value, 25, 300);
+                _currentMarkingScale = clampedPercent / 100f;
+                scaleSlider.SetValueWithoutEvent(_currentMarkingScale);
+                ScaleChanged();
+                settingScaleFromInput = false;
+            };
+
+            void UpdateOffsetsFromInputs()
+            {
+                if (settingOffsetFromInput)
+                    return;
+
+                settingOffsetFromSlider = true;
+                _currentMarkingOffsetX = Math.Clamp(offsetXSlider.Value, -1.0f, 1.0f);
+                _currentMarkingOffsetY = Math.Clamp(offsetYSlider.Value, -1.0f, 1.0f);
+
+                offsetXValueBox.Value = (int)MathF.Round(_currentMarkingOffsetX * 100f);
+                offsetYValueBox.Value = (int)MathF.Round(_currentMarkingOffsetY * 100f);
+
+                OffsetChanged();
+                settingOffsetFromSlider = false;
+            }
+
+            void UpdateOffsetsFromBoxes()
+            {
+                if (settingOffsetFromSlider)
+                    return;
+
+                settingOffsetFromInput = true;
+
+                _currentMarkingOffsetX = Math.Clamp(offsetXValueBox.Value, -100, 100) / 100f;
+                _currentMarkingOffsetY = Math.Clamp(offsetYValueBox.Value, -100, 100) / 100f;
+
+                offsetXSlider.SetValueWithoutEvent(_currentMarkingOffsetX);
+                offsetYSlider.SetValueWithoutEvent(_currentMarkingOffsetY);
+
+                OffsetChanged();
+                settingOffsetFromInput = false;
+            }
+
+            offsetXSlider.OnValueChanged += _ => UpdateOffsetsFromInputs();
+            offsetYSlider.OnValueChanged += _ => UpdateOffsetsFromInputs();
+
+            offsetXValueBox.ValueChanged += _ => UpdateOffsetsFromBoxes();
+            offsetYValueBox.ValueChanged += _ => UpdateOffsetsFromBoxes();
+
+            scaleButton.OnPressed += _ =>
+            {
+                scaleBox.Visible = !scaleBox.Visible;
+            };
+
+            scaleRow.AddChild(scaleLabel);
+            scaleRow.AddChild(scaleSlider);
+            scaleRow.AddChild(scaleValueBox);
+            offsetXRow.AddChild(new Label { Text = Loc.GetString("marking-offset-x-label") });
+            offsetXRow.AddChild(offsetXSlider);
+            offsetXRow.AddChild(offsetXValueBox);
+            offsetYRow.AddChild(new Label { Text = Loc.GetString("marking-offset-y-label") });
+            offsetYRow.AddChild(offsetYSlider);
+            offsetYRow.AddChild(offsetYValueBox);
+
+            scaleBox.AddChild(scaleRow);
+            scaleBox.AddChild(offsetXRow);
+            scaleBox.AddChild(offsetYRow);
+            CMarkingColors.AddChild(scaleButton);
+            CMarkingColors.AddChild(scaleBox);
+        }
+        // Coyote End
         StartVisibleToggle.Pressed = marking.ShowAtStart;
         RenderOverClothingToggle.Pressed = marking.RenderOverClothing;
         CanPutOnToggle.Pressed = marking.CanToggleVisible;
         CanPutOnByOtherToggle.Pressed = marking.OtherCanToggleVisible;
+        HideTogglePopupToggle.Pressed = marking.HideTogglePopup;
         PutOnTextEdit.Text = marking.PutOnVerb ?? Loc.GetString("marking-toggle-self-default-verb-on");
         TakeOffTextEdit.Text = marking.TakeOffVerb ?? Loc.GetString("marking-toggle-self-default-verb-off");
         PutOnOtherTextEdit.Text = marking.PutOnVerb2p ?? Loc.GetString("marking-toggle-other-default-verb-on");
@@ -561,6 +818,8 @@ public sealed partial class MarkingPicker : Control
 
     private void SetCheckboxVisibility()
     {
+        var togglePopupVisible = CanPutOnToggle.Pressed || CanPutOnByOtherToggle.Pressed;
+
         if (CanPutOnToggle.Pressed)
         {
             PutOnTextEdit.Visible = true;
@@ -589,12 +848,15 @@ public sealed partial class MarkingPicker : Control
             PutOnOtherTextEditLabel.Visible = false;
             TakeOffOtherTextEditLabel.Visible = false;
         }
+
+        HideTogglePopupLabel.Visible = togglePopupVisible;
+        HideTogglePopupToggle.Visible = togglePopupVisible;
     }
 
     private void ColorChanged(int colorIndex)
     {
         if (_selectedMarking is null) return;
-        var markingPrototype = (MarkingPrototype) _selectedMarking.Metadata!;
+        var markingPrototype = (MarkingPrototype)_selectedMarking.Metadata!;
         int markingIndex = _currentMarkings.FindIndexOf(_selectedMarkingCategory, markingPrototype.ID);
 
         if (markingIndex < 0) return;
@@ -607,6 +869,54 @@ public sealed partial class MarkingPicker : Control
 
         OnMarkingDataChanged?.Invoke(_currentMarkings);
     }
+
+    private void GlowChanged(int glowIndex)
+    {
+        if (_selectedMarking is null) return;
+        var markingPrototype = (MarkingPrototype)_selectedMarking.Metadata!;
+        int markingIndex = _currentMarkings.FindIndexOf(_selectedMarkingCategory, markingPrototype.ID);
+
+        if (markingIndex < 0) return;
+
+        var marking = new Marking(_currentMarkings.Markings[_selectedMarkingCategory][markingIndex]);
+        marking.SetGlow(glowIndex, _currentMarkingGlow[glowIndex]);
+        _currentMarkings.Replace(_selectedMarkingCategory, markingIndex, marking);
+
+        OnMarkingDataChanged?.Invoke(_currentMarkings);
+    }
+
+    // Coyote Start
+    private void ScaleChanged()
+    {
+        if (_selectedMarking is null) return;
+        var markingPrototype = (MarkingPrototype)_selectedMarking.Metadata!;
+        int markingIndex = _currentMarkings.FindIndexOf(_selectedMarkingCategory, markingPrototype.ID);
+
+        if (markingIndex < 0) return;
+
+        var marking = new Marking(_currentMarkings.Markings[_selectedMarkingCategory][markingIndex]);
+        marking.SetScale(_currentMarkingScale);
+        _currentMarkings.Replace(_selectedMarkingCategory, markingIndex, marking);
+
+        OnMarkingDataChanged?.Invoke(_currentMarkings);
+    }
+
+    private void OffsetChanged()
+    {
+        if (_selectedMarking is null) return;
+        var markingPrototype = (MarkingPrototype)_selectedMarking.Metadata!;
+        int markingIndex = _currentMarkings.FindIndexOf(_selectedMarkingCategory, markingPrototype.ID);
+
+        if (markingIndex < 0) return;
+
+        var marking = new Marking(_currentMarkings.Markings[_selectedMarkingCategory][markingIndex]);
+        marking.SetOffset(_currentMarkingOffsetX, _currentMarkingOffsetY);
+        _currentMarkings.Replace(_selectedMarkingCategory, markingIndex, marking);
+
+        OnMarkingDataChanged?.Invoke(_currentMarkings);
+    }
+
+    // Coyote End
 
     private void SetCanToggle(bool canToggle)
     {
@@ -670,6 +980,21 @@ public sealed partial class MarkingPicker : Control
         OnMarkingDataChanged?.Invoke(_currentMarkings);
     }
 
+    private void SetHideTogglePopup(bool hide)
+    {
+        if (_selectedMarking is null) return;
+        var markingPrototype = (MarkingPrototype)_selectedMarking.Metadata!;
+        int markingIndex = _currentMarkings.FindIndexOf(_selectedMarkingCategory, markingPrototype.ID);
+
+        if (markingIndex < 0) return;
+
+        var marking = new Marking(_currentMarkings.Markings[_selectedMarkingCategory][markingIndex]);
+        marking.HideTogglePopup = hide;
+        _currentMarkings.Replace(_selectedMarkingCategory, markingIndex, marking);
+
+        OnMarkingDataChanged?.Invoke(_currentMarkings);
+    }
+
     private void SetCustomText()
     {
         if (_selectedMarking is null) return;
@@ -686,12 +1011,19 @@ public sealed partial class MarkingPicker : Control
         marking.TakeOffVerb = TakeOffTextEdit.Text;
         marking.TakeOffVerb2p = TakeOffOtherTextEdit.Text;
 
-        SampleText.Text = GetSampleText((string.IsNullOrEmpty(marking.CustomName) ? markingPrototype.ID : marking.CustomName),
-        (string.IsNullOrEmpty(marking.PutOnVerb) ? Loc.GetString("marking-toggle-self-default-verb-on") : marking.PutOnVerb),
-        (string.IsNullOrEmpty(marking.PutOnVerb2p) ? Loc.GetString("marking-toggle-other-default-verb-on") : marking.PutOnVerb2p))
-            + "\n" + GetSampleText((string.IsNullOrEmpty(marking.CustomName) ? markingPrototype.ID : marking.CustomName),
-        (string.IsNullOrEmpty(marking.TakeOffVerb) ? Loc.GetString("marking-toggle-self-default-verb-off") : marking.TakeOffVerb),
-        (string.IsNullOrEmpty(marking.TakeOffVerb2p) ? Loc.GetString("marking-toggle-other-default-verb-off") : marking.TakeOffVerb2p));
+        if (marking.HideTogglePopup)
+        {
+            SampleText.Text = Loc.GetString("marking-toggle-popup-hidden-sample");
+        }
+        else
+        {
+            SampleText.Text = GetSampleText((string.IsNullOrEmpty(marking.CustomName) ? markingPrototype.ID : marking.CustomName),
+            (string.IsNullOrEmpty(marking.PutOnVerb) ? Loc.GetString("marking-toggle-self-default-verb-on") : marking.PutOnVerb),
+            (string.IsNullOrEmpty(marking.PutOnVerb2p) ? Loc.GetString("marking-toggle-other-default-verb-on") : marking.PutOnVerb2p))
+                + "\n" + GetSampleText((string.IsNullOrEmpty(marking.CustomName) ? markingPrototype.ID : marking.CustomName),
+            (string.IsNullOrEmpty(marking.TakeOffVerb) ? Loc.GetString("marking-toggle-self-default-verb-off") : marking.TakeOffVerb),
+            (string.IsNullOrEmpty(marking.TakeOffVerb2p) ? Loc.GetString("marking-toggle-other-default-verb-off") : marking.TakeOffVerb2p));
+        }
 
         _currentMarkings.Replace(_selectedMarkingCategory, markingIndex, marking);
 
@@ -746,7 +1078,7 @@ public sealed partial class MarkingPicker : Control
             return;
         }
 
-        var marking = (MarkingPrototype) _selectedUnusedMarking.Metadata!;
+        var marking = (MarkingPrototype)_selectedUnusedMarking.Metadata!;
         var markingObject = marking.AsMarking();
 
         // We need add hair markings in cloned set manually because _currentMarkings doesn't have it
@@ -820,7 +1152,7 @@ public sealed partial class MarkingPicker : Control
     {
         if (_selectedMarking is null) return;
 
-        var marking = (MarkingPrototype) _selectedMarking.Metadata!;
+        var marking = (MarkingPrototype)_selectedMarking.Metadata!;
 
         _currentMarkings.Remove(_selectedMarkingCategory, marking.ID);
 

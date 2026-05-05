@@ -5,6 +5,7 @@ using Content.Shared.Mobs;
 using Content.Server.Administration.Logs;
 using Content.Server.Chat.Managers;
 using Content.Server.Popups;
+using Content.Server.Shuttles.Components;
 using Content.Shared.Database;
 using Content.Shared.Popups;
 using Robust.Shared.Player;
@@ -105,6 +106,28 @@ public sealed class SalvageMobRestrictionsSystem : EntitySystem
 
         var gridUid = Transform(uid).GridUid;
         var popupMessage = Loc.GetString(component.LeaveGridPopup);
+
+        // If this NPC gets onto a shuttle grid, release salvage restrictions permanently.
+        // This allows it to return with the ship and avoids expedition cleanup deleting it.
+        // Keep the component so death-state add/remove behavior still runs (e.g. Unrevivable on death).
+        if (gridUid is { } currentGrid && HasComp<ShuttleComponent>(currentGrid))
+        {
+            if (component.LinkedGridEntity != currentGrid)
+            {
+                if (TryComp(component.LinkedGridEntity, out SalvageMobRestrictionsGridComponent? oldGrid))
+                    oldGrid.MobsToKill.Remove(uid);
+
+                if (!TryComp(currentGrid, out SalvageMobRestrictionsGridComponent? shuttleGrid))
+                    shuttleGrid = AddComp<SalvageMobRestrictionsGridComponent>(currentGrid);
+
+                shuttleGrid.MobsToKill.Add(uid);
+                component.LinkedGridEntity = currentGrid;
+            }
+
+            EntityManager.AddComponents(uid, component.AddComponentsReturnGrid);
+            EntityManager.RemoveComponents(uid, component.RemoveComponentsReturnGrid);
+            return;
+        }
 
         if (component.LinkedGridEntity == gridUid && HasComp<SalvageMobRestrictionsGridComponent>(gridUid))
         {

@@ -114,7 +114,11 @@ public partial class ChatBox : UIWidget
         }
 
         if (msg is { Read: false, AudioPath: { } })
-            _entManager.System<AudioSystem>().PlayGlobal(msg.AudioPath, Filter.Local(), false, AudioParams.Default.WithVolume(msg.AudioVolume));
+        {
+            var audio = _entManager.System<AudioSystem>();
+            var path = msg.AudioPath!;
+            audio.PlayGlobal(new SoundPathSpecifier(path), Filter.Local(), false, AudioParams.Default.WithVolume(msg.AudioVolume));
+        }
 
         msg.Read = true;
 
@@ -518,6 +522,7 @@ public partial class ChatBox : UIWidget
         }
     }
 
+    [Obsolete("Controls should only be removed from UI tree instead of being disposed")]
     protected override void Dispose(bool disposing)
     {
         base.Dispose(disposing);

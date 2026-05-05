@@ -16,6 +16,7 @@ visible-at-start = Starts enabled
 marking-render-over-clothing = Render over worn clothing
 marking-can-toggle = Can be toggled on/off in game by you
 marking-can-toggle-other = Can be toggled on/off in game by others
+marking-hide-toggle-popup = Hide toggle popup text
 marking-put-on-text-label = Toggle-On Verb
 marking-take-off-text-label = Toggle-Off Verb
 marking-put-on-text-label-other = Toggle-On Verb (by other)
@@ -33,6 +34,14 @@ marking-toggle-other-default-verb-off = takes off
 marking-sample-text = Sample:
 marking-show-sample-text = Show Sample Text
 marking-hide-sample-text = Hide Sample Text
+# Coyote Start
+marking-adjust-scale-text = Adjust Scale
+marking-toggle-popup-hidden-sample = Toggle popup text is hidden for this marking.
+marking-glow-label = Glow
+marking-scale-label = Scale
+marking-offset-x-label = Offset X
+marking-offset-y-label = Offset Y
+# End Coyote
 
 # Categories
 
