@@ -59,6 +59,12 @@ public sealed partial class CCVars
             CVarDef.Create("audio.interface_volume", 0.50f, CVar.ARCHIVE | CVar.CLIENTONLY);
 
         /// <summary>
+        ///     Weather effects volume.
+        /// </summary>
+        public static readonly CVarDef<float> WeatherEffectsVolume =
+            CVarDef.Create("audio.weather_effects_volume", 1.0f, CVar.ARCHIVE | CVar.CLIENTONLY);
+
+        /// <summary>
         ///     Pocket Sized Andy announcement volume.
         /// </summary>
         public static readonly CVarDef<float> AndyAnnouncementVolume =

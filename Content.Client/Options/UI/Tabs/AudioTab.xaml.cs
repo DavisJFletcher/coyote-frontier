@@ -44,6 +44,11 @@ public sealed partial class AudioTab : Control
             SliderVolumeAmbience,
             scale: ContentAudioSystem.AmbienceMultiplier);
 
+        Control.AddOptionPercentSlider(
+            CCVars.WeatherEffectsVolume,
+            SliderVolumeWeatherEffects,
+            scale: ContentAudioSystem.WeatherMultiplier);
+
         // Frontier: add expedition volume slider
         Control.AddOptionPercentSlider(
             NFCCVars.SalvageExpeditionMusicVolume,

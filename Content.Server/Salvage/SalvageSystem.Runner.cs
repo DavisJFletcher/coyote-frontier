@@ -12,6 +12,7 @@ using Content.Shared.Mobs.Systems;
 using Content.Shared.Salvage.Expeditions;
 using Content.Shared.Shuttles.Components;
 using Content.Shared.Localizations;
+using Content.Shared.Parallax.Biomes;
 using Robust.Shared.Map.Components;
 using Robust.Shared.Player;
 using Robust.Shared.Map; // _CS
@@ -54,7 +55,7 @@ public sealed partial class SalvageSystem
     [Dependency] private readonly TemperatureSystem _temperature = default!;
 
     private static readonly TimeSpan StandardShipExpeditionDuration = TimeSpan.FromMinutes(15);
-    private static readonly TimeSpan SharedShipExpeditionDuration = TimeSpan.FromMinutes(20);
+    private static readonly TimeSpan SharedShipExpeditionDuration = TimeSpan.FromMinutes(30);
     private readonly Dictionary<EntityUid, TimeSpan> _pausedShuttleExpeditionRemaining = new();
     private readonly Dictionary<EntityUid, TimeSpan> _previousNaturalAnnouncementRemaining = new();
 
@@ -161,6 +162,8 @@ public sealed partial class SalvageSystem
         if (!TryComp<SalvageExpeditionComponent>(args.MapUid, out var component))
             return;
 
+        ReleaseLandingZoneReservation(args.MapUid, args.Entity, component);
+
         if (!component.ShuttleEndTimes.ContainsKey(args.Entity))
             component.ShuttleEndTimes[args.Entity] = _timing.CurTime + GetDefaultShipExpeditionDuration(component);
 
@@ -184,16 +187,38 @@ public sealed partial class SalvageSystem
             UpdateSsdGoobers(args.MapUid, component);
         }
 
-        // Dungeon direction is meaningful for standard expeditions only.
-        // Shared/open contracts have multiple objective clusters and no single reliable heading.
-        if (!component.MissionParams.OpenContract && component.DungeonLocation != Vector2.Zero)
+        // Compute direction from each arriving shuttle so every ship gets an accurate heading.
+        if (component.DungeonLocation != Vector2.Zero)
         {
+            // Shuttle has landed by FTLCompleted; use its actual position
             var shuttlePosition = _transform.GetMapCoordinates(args.Entity).Position;
-            var dungeonDirection = component.DungeonLocation - shuttlePosition;
+            string? dirMsg = null;
 
-            if (dungeonDirection.LengthSquared() > 0.01f)
+            if (component.SharedDungeonCenters.Count > 0)
             {
-                var directionLocalization = ContentLocalizationManager.FormatDirection(dungeonDirection.GetDir()).ToLower();
+                // Shared expedition: announce direction to each compound cluster.
+                var directionStrings = new List<string>();
+                foreach (var center in component.SharedDungeonCenters)
+                {
+                    var d = center - shuttlePosition;
+                    if (d.LengthSquared() > 0.01f)
+                        directionStrings.Add(ContentLocalizationManager.FormatDirection(d.GetDir()).ToLower());
+                }
+                if (directionStrings.Count > 0)
+                    dirMsg = Loc.GetString("salvage-expedition-announcement-dungeon-multi", ("directions", string.Join(", ", directionStrings)));
+            }
+            else
+            {
+                var dungeonDirection = component.DungeonLocation - shuttlePosition;
+                if (dungeonDirection.LengthSquared() > 0.01f)
+                {
+                    var directionLocalization = ContentLocalizationManager.FormatDirection(dungeonDirection.GetDir()).ToLower();
+                    dirMsg = Loc.GetString("salvage-expedition-announcement-dungeon", ("direction", directionLocalization));
+                }
+            }
+
+            if (dirMsg != null)
+            {
                 var shipRemaining = component.ShuttleEndTimes.TryGetValue(args.Entity, out var shipEndTime)
                     ? shipEndTime - _timing.CurTime
                     : component.EndTime - _timing.CurTime;
@@ -202,7 +227,6 @@ public sealed partial class SalvageSystem
                     shipRemaining = TimeSpan.Zero;
 
                 var shipMinutes = GetDisplayedRemainingMinutes(shipRemaining);
-                var dirMsg = Loc.GetString("salvage-expedition-announcement-dungeon", ("direction", directionLocalization));
                 var remainingMsg = Loc.GetString("salvage-expedition-announcement-countdown-minutes", ("duration", shipMinutes));
 
                 if (isFirstArrival)
@@ -260,6 +284,43 @@ public sealed partial class SalvageSystem
             component.Stage = ExpeditionStage.Running;
             Dirty(args.MapUid, component);
             InitExpeditionWeather(args.MapUid, component);
+        }
+    }
+
+    private void ReleaseLandingZoneReservation(EntityUid expeditionMap, EntityUid shuttleGridUid, SalvageExpeditionComponent expedition)
+    {
+        if (!TryComp<MapGridComponent>(shuttleGridUid, out var shuttleGrid))
+            return;
+
+        var shuttlePosition = _transform.GetMapCoordinates(shuttleGridUid).Position;
+        var shuttleBox = shuttleGrid.LocalAABB.Translated(shuttlePosition).Enlarged(1f);
+        var releasedZones = new List<Box2>();
+
+        var removed = false;
+        for (var i = expedition.ReservedLandingZones.Count - 1; i >= 0; i--)
+        {
+            if (!expedition.ReservedLandingZones[i].Intersects(shuttleBox))
+                continue;
+
+            releasedZones.Add(expedition.ReservedLandingZones[i]);
+            expedition.ReservedLandingZones.RemoveAt(i);
+            removed = true;
+        }
+
+        if (removed)
+        {
+            // Ensure pre-reserved landing areas are immediately backfilled so they do not remain void.
+            if (TryComp<BiomeComponent>(expeditionMap, out var biome) &&
+                TryComp<MapGridComponent>(expeditionMap, out var expeditionGrid))
+            {
+                var tiles = new List<(Vector2i Index, Tile Tile)>();
+                foreach (var zone in releasedZones)
+                {
+                    _biome.ReserveTiles(expeditionMap, zone, tiles, biome, expeditionGrid);
+                }
+            }
+
+            Dirty(expeditionMap, expedition);
         }
     }
 
@@ -627,7 +688,7 @@ public sealed partial class SalvageSystem
                 }
 
                 deadLoserDestinations ??= GetDeadLoserDestinations(shuttleGrid.Value);
-                RescueDork(mobUid, deadLoserDestinations, shuttleGrid.Value);
+                RescueDork(mobUid, deadLoserDestinations, shuttleGrid.Value, expedition);
                 Spawn("EffectSparks", Transform(mobUid).Coordinates);
                 Spawn("EffectGravityPulse", Transform(mobUid).Coordinates);
                 SoundSpecifier sound = new SoundPathSpecifier("/Audio/_CS/ExpedReturnToBed.ogg");
@@ -682,13 +743,16 @@ public sealed partial class SalvageSystem
     private void RescueDork(
         EntityUid mobUid,
         DestinationPriority possibleDestinations,
-        EntityUid shuttleGrid)
+        EntityUid shuttleGrid,
+        SalvageExpeditionComponent expedition)
     {
         TendToDork(mobUid);
         Spawn("EffectGravityPulse", Transform(mobUid).Coordinates);
         Spawn("EffectSparks", Transform(mobUid).Coordinates);
         // unbuckle them if they are buckled
         _buckle.TryUnbuckle(mobUid, null);
+        if (TryTeleportToRecordedSharedShuttlePosition(mobUid, shuttleGrid, expedition))
+            return;
         // try beds first
         foreach (var bedUid in possibleDestinations.Beds)
         {
@@ -719,6 +783,23 @@ public sealed partial class SalvageSystem
             _transform.AttachToGridOrMap(mobUid, mobXform);
             return;
         }
+    }
+
+    private bool TryTeleportToRecordedSharedShuttlePosition(EntityUid mobUid, EntityUid shuttleGrid, SalvageExpeditionComponent expedition)
+    {
+        if (!expedition.MissionParams.OpenContract)
+            return false;
+
+        if (!expedition.SharedArrivalShuttles.TryGetValue(mobUid, out var assignedShuttle) || assignedShuttle != shuttleGrid)
+            return false;
+
+        if (!expedition.SharedArrivalShuttleLocalPositions.TryGetValue(mobUid, out var localPosition))
+            return false;
+
+        var mobXform = Transform(mobUid);
+        _transform.SetCoordinates(mobUid, new EntityCoordinates(shuttleGrid, localPosition));
+        _transform.AttachToGridOrMap(mobUid, mobXform);
+        return true;
     }
 
     /// <summary>
@@ -909,6 +990,9 @@ public sealed partial class SalvageSystem
     /// </summary>
     private void AbortIfWiped(EntityUid mapUid, SalvageExpeditionComponent component)
     {
+        if (component.MissionParams.OpenContract)
+            return;
+
         if (component.Aborted)
             return;
         // give it a 30 second grade after first check to avoid instant aborts
@@ -988,6 +1072,7 @@ public sealed partial class SalvageSystem
             return;
 
         component.Aborted = true;
+        StopExpeditionWeather(mapUid, component);
         // everyone is dead or ssd, abort the expedition
         const int departTime = 20;
         Announce(mapUid, Loc.GetString("salvage-expedition-abort-wipe"));
@@ -1056,6 +1141,7 @@ public sealed partial class SalvageSystem
                 continue;
 
             expedition.SharedArrivalShuttles[mobUid] = shuttleUid;
+            expedition.SharedArrivalShuttleLocalPositions[mobUid] = _transform.ToCoordinates(shuttleUid, _transform.GetMapCoordinates(mobUid)).Position;
         }
     }
 
@@ -1096,6 +1182,7 @@ public sealed partial class SalvageSystem
                 continue;
 
             expedition.SharedArrivalShuttles[mobUid] = mobGrid;
+            expedition.SharedArrivalShuttleLocalPositions[mobUid] = _transform.ToCoordinates(mobGrid, _transform.GetMapCoordinates(mobUid)).Position;
         }
 
         foreach (var trackedMob in expedition.SharedArrivalShuttles.Keys.ToArray())
@@ -1104,6 +1191,7 @@ public sealed partial class SalvageSystem
                 continue;
 
             expedition.SharedArrivalShuttles.Remove(trackedMob);
+            expedition.SharedArrivalShuttleLocalPositions.Remove(trackedMob);
         }
     }
 
