@@ -2792,3 +2792,10 @@ Entries:
   id: 318
   time: '2026-05-15T01:06:58.0000000+00:00'
   url: https://github.com/ARF-SS13/coyote-frontier/pull/1197
+- author: DevArchwave
+  changes:
+    - type: Fix
+      message: Mitigated a client crash related to markings.
+  id: 319
+  time: '2026-05-17T11:16:44.0000000+00:00'
+  url: https://github.com/ARF-SS13/coyote-frontier/pull/1198
