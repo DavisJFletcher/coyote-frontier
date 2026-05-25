@@ -24,6 +24,7 @@ namespace Content.Client.Viewport
         [Dependency] private readonly IClyde _clyde = default!;
         [Dependency] private readonly IEntityManager _entityManager = default!;
         [Dependency] private readonly IInputManager _inputManager = default!;
+        [Dependency] private readonly IGameTiming _timing = default!;
 
         // Internal viewport creation is deferred.
         private IClydeViewport? _viewport;
@@ -36,6 +37,14 @@ namespace Content.Client.Viewport
         private int _fixedRenderScale = 1;
 
         private readonly List<CopyPixelsDelegate<Rgba32>> _queuedScreenshots = new();
+        private TimeSpan _nextRenderTime = TimeSpan.Zero;
+
+        /// <summary>
+        /// Optional max render rate for this viewport. Set to <= 0 to render every UI frame.
+        /// Useful for remote/camera feeds where lower temporal resolution is acceptable.
+        /// </summary>
+        [ViewVariables(VVAccess.ReadWrite)]
+        public float MaxRenderRate { get; set; } = 0f;
 
         public int CurrentRenderScale => _curRenderScale;
 
@@ -149,14 +158,24 @@ namespace Content.Client.Viewport
             EnsureViewportCreated();
 
             DebugTools.AssertNotNull(_viewport);
+            var viewport = _viewport!;
 
-            _viewport!.Render();
+            var forceRender = _queuedScreenshots.Count != 0;
+            if (forceRender || MaxRenderRate <= 0f || _timing.RealTime >= _nextRenderTime)
+            {
+                viewport.Render();
+
+                if (MaxRenderRate > 0f)
+                {
+                    _nextRenderTime = _timing.RealTime + TimeSpan.FromSeconds(1f / MaxRenderRate);
+                }
+            }
 
             if (_queuedScreenshots.Count != 0)
             {
                 var callbacks = _queuedScreenshots.ToArray();
 
-                _viewport.RenderTarget.CopyPixelsToMemory<Rgba32>(image =>
+                viewport.RenderTarget.CopyPixelsToMemory<Rgba32>(image =>
                 {
                     foreach (var callback in callbacks)
                     {
@@ -169,9 +188,9 @@ namespace Content.Client.Viewport
 
             var drawBox = GetDrawBox();
             var drawBoxGlobal = drawBox.Translated(GlobalPixelPosition);
-            _viewport.RenderScreenOverlaysBelow(handle, this, drawBoxGlobal);
-            handle.DrawingHandleScreen.DrawTextureRect(_viewport.RenderTarget.Texture, drawBox);
-            _viewport.RenderScreenOverlaysAbove(handle, this, drawBoxGlobal);
+            viewport.RenderScreenOverlaysBelow(handle, this, drawBoxGlobal);
+            handle.DrawingHandleScreen.DrawTextureRect(viewport.RenderTarget.Texture, drawBox);
+            viewport.RenderScreenOverlaysAbove(handle, this, drawBoxGlobal);
         }
 
         public void Screenshot(CopyPixelsDelegate<Rgba32> callback)

@@ -30,7 +30,9 @@ public sealed partial class SurveillanceCameraMonitorWindow : DefaultWindow
     private string _currentAddress = string.Empty;
     private bool _isSwitching;
     private readonly FixedEye _defaultEye = new();
+    private readonly Dictionary<string, string> _cameraCache = new();
     private readonly Dictionary<string, int> _subnetMap = new();
+    private readonly HashSet<string> _subnetCache = new();
 
     private string? SelectedSubnet
     {
@@ -55,7 +57,12 @@ public sealed partial class SurveillanceCameraMonitorWindow : DefaultWindow
         var texture = _resourceCache.GetTexture("/Textures/Interface/Nano/square_black.png");
         var shader = _prototypeManager.Index<ShaderPrototype>("CameraStatic").Instance().Duplicate();
 
-        CameraView.ViewportSize = new Vector2i(500, 500);
+        // CCTV feeds do not need full-resolution world rendering; keep this smaller to
+        // reduce per-frame viewport/light target memory pressure when watching broadcasts.
+        CameraView.ViewportSize = new Vector2i(320, 320);
+        CameraView.FixedRenderScale = 1;
+        CameraView.StretchMode = ScalingViewportStretchMode.Nearest;
+        CameraView.MaxRenderRate = 20f;
         CameraView.Eye = _defaultEye; // sure
         CameraViewBackground.Stretch = TextureRect.StretchMode.Scale;
         CameraViewBackground.Texture = texture;
@@ -83,16 +90,12 @@ public sealed partial class SurveillanceCameraMonitorWindow : DefaultWindow
 
         if (subnets.Count == 0)
         {
-            SubnetSelector.AddItem(Loc.GetString("surveillance-camera-monitor-ui-no-subnets"));
-            SubnetSelector.Disabled = true;
+            UpdateSubnetSelectorEmpty();
+            PopulateCameraList(cameras);
             return;
         }
 
-        if (SubnetSelector.Disabled && subnets.Count != 0)
-        {
-            SubnetSelector.Clear();
-            SubnetSelector.Disabled = false;
-        }
+        UpdateSubnetSelector(subnets);
 
         // That way, we have *a* subnet selected if this is ever opened.
         if (string.IsNullOrEmpty(activeSubnet))
@@ -101,23 +104,12 @@ public sealed partial class SurveillanceCameraMonitorWindow : DefaultWindow
             return;
         }
 
-        // if the subnet count is unequal, that means
-        // we have to rebuild the subnet selector
-        if (SubnetSelector.ItemCount != subnets.Count)
-        {
-            SubnetSelector.Clear();
-            _subnetMap.Clear();
-
-            foreach (var subnet in subnets)
-            {
-                var id = AddSubnet(subnet);
-                _subnetMap.Add(subnet, id);
-            }
-        }
-
         if (_subnetMap.TryGetValue(activeSubnet, out var subnetId))
         {
-            SubnetSelector.Select(subnetId);
+            if (SubnetSelector.SelectedId != subnetId)
+            {
+                SubnetSelector.Select(subnetId);
+            }
         }
 
         PopulateCameraList(cameras);
@@ -125,6 +117,17 @@ public sealed partial class SurveillanceCameraMonitorWindow : DefaultWindow
 
     private void PopulateCameraList(Dictionary<string, string> cameras)
     {
+        if (DictionariesEqual(_cameraCache, cameras))
+        {
+            return;
+        }
+
+        _cameraCache.Clear();
+        foreach (var (address, name) in cameras)
+        {
+            _cameraCache[address] = name;
+        }
+
         var entries = cameras.Select(i => new ItemList.Item(SubnetList) {
             Text = $"{i.Value}: {i.Key}",
             Metadata = i.Key
@@ -188,5 +191,57 @@ public sealed partial class SurveillanceCameraMonitorWindow : DefaultWindow
     private void OnSubnetListSelect(ItemList.ItemListSelectedEventArgs args)
     {
         CameraSelected!((string) SubnetList[args.ItemIndex].Metadata!);
+    }
+
+    private void UpdateSubnetSelector(HashSet<string> subnets)
+    {
+        if (!_subnetCache.SetEquals(subnets) || SubnetSelector.Disabled)
+        {
+            _subnetCache.Clear();
+            _subnetCache.UnionWith(subnets);
+
+            SubnetSelector.Clear();
+            _subnetMap.Clear();
+            SubnetSelector.Disabled = false;
+
+            foreach (var subnet in subnets)
+            {
+                var id = AddSubnet(subnet);
+                _subnetMap.Add(subnet, id);
+            }
+        }
+    }
+
+    private void UpdateSubnetSelectorEmpty()
+    {
+        _subnetCache.Clear();
+        _subnetMap.Clear();
+
+        if (SubnetSelector.Disabled && SubnetSelector.ItemCount == 1)
+        {
+            return;
+        }
+
+        SubnetSelector.Clear();
+        SubnetSelector.AddItem(Loc.GetString("surveillance-camera-monitor-ui-no-subnets"));
+        SubnetSelector.Disabled = true;
+    }
+
+    private static bool DictionariesEqual(Dictionary<string, string> left, Dictionary<string, string> right)
+    {
+        if (left.Count != right.Count)
+        {
+            return false;
+        }
+
+        foreach (var (key, value) in right)
+        {
+            if (!left.TryGetValue(key, out var leftValue) || leftValue != value)
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

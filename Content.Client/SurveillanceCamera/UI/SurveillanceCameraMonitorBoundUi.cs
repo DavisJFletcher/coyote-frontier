@@ -111,6 +111,8 @@ public sealed class SurveillanceCameraMonitorBoundUserInterface : BoundUserInter
     {
         base.Dispose(disposing);
 
+        _surveillanceCameraMonitorSystem.RemoveTimer(Owner);
+
         if (_currentCamera != null)
         {
             _eyeLerpingSystem.RemoveEye(_currentCamera.Value);
@@ -119,7 +121,18 @@ public sealed class SurveillanceCameraMonitorBoundUserInterface : BoundUserInter
 
         if (disposing)
         {
-            _window?.Dispose();
+            if (_window != null)
+            {
+                _window.CameraSelected -= OnCameraSelected;
+                _window.SubnetOpened -= OnSubnetRequest;
+                _window.CameraRefresh -= OnCameraRefresh;
+                _window.SubnetRefresh -= OnSubnetRefresh;
+                _window.CameraSwitchTimer -= OnCameraSwitchTimer;
+                _window.CameraDisconnect -= OnCameraDisconnect;
+                _window.Dispose();
+            }
+
+            _window = null;
         }
     }
 }

@@ -17,9 +17,9 @@
             <viewport:ScalingViewport Name="CameraView"
                                       VerticalExpand="True"
                                       HorizontalExpand="True"
-                                      MinSize="500 500"
+                                      MinSize="320 320"
                                       MouseFilter="Ignore" />
-            <TextureRect VerticalExpand="True" HorizontalExpand="True" MinSize="500 500" Name="CameraViewBackground" />
+            <TextureRect VerticalExpand="True" HorizontalExpand="True" MinSize="320 320" Name="CameraViewBackground" />
         </Control>
     </BoxContainer>
 </DefaultWindow>
