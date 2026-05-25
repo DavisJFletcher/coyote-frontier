@@ -7,6 +7,12 @@
 
   # Functional
   extraModuleCount: 5
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleScience #until sciborgs are added
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -38,6 +44,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleEngineering
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -71,6 +83,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleCargo
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -105,6 +123,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleJanitor
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -138,6 +162,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleMedical
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -188,6 +218,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleService
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -227,6 +263,12 @@
 
   # Functional
   extraModuleCount: 5
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleScience #until sciborgs are added
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -265,6 +307,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleEngineering
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -306,6 +354,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleCargo
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -347,6 +401,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleJanitor
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -387,6 +447,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleMedical
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -442,6 +508,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleService
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -488,6 +560,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleCargo
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
@@ -529,6 +607,12 @@
 
   # Functional
   extraModuleCount: 3
+# Coyote: Remove borg module whitelist
+#  moduleWhitelist:
+#    tags:
+#    - BorgModuleGeneric
+#    - BorgModuleCargo
+# End Coyote
 
   defaultModules:
   - BorgModuleTool
